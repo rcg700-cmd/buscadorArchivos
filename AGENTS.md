@@ -1,9 +1,10 @@
 # AGENTS.md — buscadorArchivos
 
+**Repositorio público:** https://github.com/rcg700-cmd/buscadorArchivos (owner: rcg700-cmd; publicar cambios con `git push` tras hacer commit; login de `gh` ya autenticado).
+
 ## Estado del repositorio
 
-- **El repositorio está vacío.** No hay código, manifiestos ni configuración de build todavía. No intentes ejecutar ni detectar estructura: no existe.
-- No hay stack decidido aún. **Pregunta al usuario antes de crear scaffolding.**
+- **Proyecto funcional v1:** buscador TUI completado y publicado (ver Stack/Arquitectura abajo). El repo ya no está vacío; no suponga lo contrario.
 
 ## Objetivo del proyecto (especificación acordada con el usuario)
 
