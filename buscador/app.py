@@ -18,9 +18,9 @@ from .escaner import Registro, cargar_cache, iniciar_escaneo, raices_por_defecto
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
 
-# Ancho final (en caracteres) de cada columna, divisor incluido.
-# El "Nombre" puede recortarse con "…"; el resto nunca necesita más.
-ANCHOS = {"Nombre": 46, "Tipo": 14, "Creado": 19, "Modificado": 19, "Peso": 12}
+# Ancho final (en caracteres) de cada columna, separador incluido.
+# Total ~130 columnas; en terminales angostos la tabla permite desplazamiento horizontal.
+ANCHOS = {"Nombre": 30, "Tipo": 13, "Creado": 18, "Modificado": 18, "Peso": 11, "Carpeta": 40}
 SEP = " │ "  # separador visual entre columnas
 
 
@@ -113,7 +113,8 @@ class BuscadorApp(App):
             _celda("Tipo", ANCHOS["Tipo"]),
             _celda("Creado", ANCHOS["Creado"]),
             _celda("Modificado", ANCHOS["Modificado"]),
-            _celda_final("Peso", ANCHOS["Peso"]),
+            _celda("Peso", ANCHOS["Peso"]),
+            _celda_final("Carpeta", ANCHOS["Carpeta"]),
         )
         yield tabla
         yield Footer()
@@ -211,7 +212,8 @@ class BuscadorApp(App):
                 _celda(r.tipo, ANCHOS["Tipo"]),
                 _celda(fmt_fecha(r.creado), ANCHOS["Creado"]),
                 _celda(fmt_fecha(r.modificado), ANCHOS["Modificado"]),
-                _celda_final(fmt_tamano(r.tamano), ANCHOS["Peso"]),
+                _celda(fmt_tamano(r.tamano), ANCHOS["Peso"]),
+                _celda_final(os.path.dirname(r.ruta), ANCHOS["Carpeta"]),
                 key=str(i),
             )
         try:
