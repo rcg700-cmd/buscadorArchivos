@@ -197,8 +197,10 @@ class BuscadorApp(App):
             pass
 
         estado = f"Encontrados: {fmt_num(len(self.registros))} archivos de Office/PDF"
+        if self.texto:
+            estado += f" · Visibles: {fmt_num(len(encontradas))}"
         if ocultas > 0:
-            estado += f" — mostrando las primeras {fmt_num(len(self.mostradas))} (sigue escribiendo)"
+            estado += f" — las primeras {fmt_num(len(self.mostradas))} (sigue escribiendo)"
         if self.escaneando:
             estado = "⏳ Escaneando el disco… " + estado
         elif self.de_cache:
