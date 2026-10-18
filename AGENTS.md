@@ -31,7 +31,7 @@ Buscador de archivos de suites ofimáticas para escritorio:
 
 ## Arquitectura
 
-- `buscador/escaner.py`: hilo daemon con `os.scandir` iterativo (una pila, sin recursión), filtra por extensión y llena una `queue.Queue` con `Registro` (ruta, nombre minúsculas para filtrar, tipo, tamaño, fechas); termina con la tupla `("fin", lista_completa)` como marcador.
+- `buscador/escaner.py`: **escaneo en paralelo** con `N_HILOS = max(4, min(32, cpu*4))` trabajadores que consumen una `cola_dirs`; `pendientes` (lista mutable + lock) cuenta carpetas en vuelo y los trabajadores se retiran cuando llega a 0. Un hilo coordinador traslada los `Registro` de la cola interna a la `queue.Queue` de la UI conforme llegan, y al final enfila `("fin", lista_completa)` como marcador. Beneficio medido: **4.5×** vs el escaneo en serie (90 s → 20 s en ~470 archivos del home).
 - `buscador/app.py`: app Textual. El tick de `set_interval(0.25, ...)` drena la cola (hilo→UI en el event loop de Textual); el filtro search-as-you-type es subcadena en `nombre_min`. Renderiza máx. `MAX_MOSTRADOS = 1000` filas; reconstruye la tabla solo si cambia la firma `(texto, total, escaneando)` y conserva `cursor_row`. El orden **por nombre** se aplica al cargar la caché y al terminar cada escaneo (`_clave_orden` = nombre minúsculas + ruta de desempate); durante un escaneo en curso las llegadas nuevas aparecen sin orden hasta el fin. **Layout:** columnas de ancho fijo (`ANCHOS`) con separador visual `│` construido dentro de cada celda (`_celda`/`_celda_final`); los encabezados se generan con el mismo helper para que la división quede alineada. El "Nombre" se recorta con `…` si excede su ancho.
 - Enter/doble clic → `os.startfile` (Windows) o `xdg-open` (Linux). No existe lógica de contenido ni índices en disco.
 - **Caché (`escaner.py`):** al terminar un escaneo se guarda lista completa en JSON en el perfil de usuario (Windows `%LOCALAPPDATA%\buscador-archivo\cache.json`; Linux `$XDG_CACHE_HOME`/`buscador-archivo`), atómica vía `.json.tmp` + `replace`. La caché se carga en `on_mount` solo si sus raíces coinciden; durante un re-escaneo (F5) se fusiona por ruta con `rutas_conocidas` (sin duplicados) y al llegar `("fin", lista)` en la cola se reemplaza todo por la lista fresca. `iniciar_escaneo(raices, guardar=False)` no escribe caché (útil para pruebas).
@@ -40,6 +40,7 @@ Buscador de archivos de suites ofimáticas para escritorio:
 
 - En Linux `st_ctime` no es fecha de creación real (no es legible en general); se muestra tal cual en la columna "Creado".
 - La caché muestra el estado del último escaneo: los archivos creados/borrados desde entonces solo se reflejan tras F5. La primera vez (sin caché) el escaneo de todo el disco puede tardar minutos.
+- Los placeholders de OneDrive (`st.stat()` sobre archivos "solo en la nube") son lentos; en carpetas OneDrive el escaneo tarda aunque sea paralelo. En discos HDD la aceleración paralela también es limitada (cuello de botella físico).
 - El estado en pantalla distingue: ⏳ escaneando / 💾 de caché / nada = resultados frescos.
 
 ## Próximos pasos pendientes

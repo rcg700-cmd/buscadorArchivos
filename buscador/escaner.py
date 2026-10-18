@@ -14,6 +14,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+# Hilos en paralelo: escanear carpetas distintas a la vez (cuello de botella = I/O de disco)
+N_HILOS = max(4, min(32, (os.cpu_count() or 4) * 4))
+
 # Extensiones admitidas -> nombre amigable del tipo
 EXTENSIONES = {
     ".doc": "Word",
@@ -62,18 +65,36 @@ def raices_por_defecto():
     return ["/"]
 
 
-def escanear(raices, cola, guardar=True):
-    """Recorre las raíces y mete cada archivo encontrado en la cola.
+def escanear(raices, salida, guardar=True):
+    """Escanea las raíces en paralelo (varios hilos) y mete cada archivo
+    encontrado en la cola `salida` conforme llega.
 
     Al terminar enfila la tupla ("fin", lista_completa) —la lista fresca
     completa— y, si `guardar` es verdadero, la guarda en la caché. Los errores
     de permisos o de carpetas inaccesibles se ignoran silenciosamente.
+
+    Coordinación: `pendientes` cuenta las carpetas descubiertas que aún
+    nadie procesó (se incrementa antes de encolarlas y se decrementa al
+    terminar de procesarlas). Cuando llega a 0 ya no queda nada en cola ni
+    en vuelo, y los trabajadores se retiran.
     """
-    encontrados = []
+    pendientes = [len(raices)]  # lista mutable compartida entre hilos
+    lock = threading.Lock()
+    parado = threading.Event()
+    cola_dirs = queue.Queue()
+    cola_salida = queue.Queue()  # registros frescos: trabajadores → coordinator
     for raiz in raices:
-        pila = [raiz]
-        while pila:
-            carpeta = pila.pop()
+        cola_dirs.put(raiz)
+
+    def trabajador():
+        while not parado.is_set():
+            try:
+                carpeta = cola_dirs.get(timeout=0.05)
+            except queue.Empty:
+                with lock:
+                    if pendientes[0] <= 0:
+                        return
+                continue
             try:
                 with os.scandir(carpeta) as entradas:
                     for entrada in entradas:
@@ -84,29 +105,55 @@ def escanear(raices, cola, guardar=True):
                                     continue
                                 if entrada.name.lower() in CARPETAS_IGNORADAS:
                                     continue
-                                pila.append(entrada.path)
+                                with lock:
+                                    pendientes[0] += 1
+                                cola_dirs.put(entrada.path)
                             else:
                                 ext = os.path.splitext(entrada.name)[1].lower()
                                 if ext not in EXTENSIONES:
                                     continue
                                 st = entrada.stat()
                                 nombre = entrada.name
-                                r = Registro(
-                                    ruta=entrada.path,
-                                    nombre=nombre,
-                                    tipo=EXTENSIONES[ext],
-                                    tamano=st.st_size,
-                                    creado=datetime.fromtimestamp(st.st_ctime),
-                                    modificado=datetime.fromtimestamp(st.st_mtime),
-                                    nombre_min=nombre.casefold(),
+                                cola_salida.put(
+                                    Registro(
+                                        ruta=entrada.path,
+                                        nombre=nombre,
+                                        tipo=EXTENSIONES[ext],
+                                        tamano=st.st_size,
+                                        creado=datetime.fromtimestamp(st.st_ctime),
+                                        modificado=datetime.fromtimestamp(st.st_mtime),
+                                        nombre_min=nombre.casefold(),
+                                    )
                                 )
-                                encontrados.append(r)
-                                cola.put(r)
                         except OSError:
                             continue
             except OSError:
-                continue
-    cola.put(("fin", encontrados))
+                pass
+            finally:
+                with lock:
+                    pendientes[0] -= 1
+
+    hilos = [threading.Thread(target=trabajador, daemon=True) for _ in range(N_HILOS)]
+    encontrados = []
+    for h in hilos:
+        h.start()
+    while any(h.is_alive() for h in hilos):
+        # Traslada lo fresco a la salida para que la UI lo muestre al vuelo
+        try:
+            while True:
+                encontrados.append(cola_salida.get_nowait())
+                salida.put(encontrados[-1])
+        except queue.Empty:
+            pass
+        parado.wait(0.1)
+    # Recolecta lo que quede antes de anunciar el fin
+    while True:
+        try:
+            encontrados.append(cola_salida.get_nowait())
+            salida.put(encontrados[-1])
+        except queue.Empty:
+            break
+    salida.put(("fin", encontrados))
     if guardar:
         guardar_cache(tuple(raices), encontrados)
 
