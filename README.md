@@ -1,19 +1,33 @@
 # buscadorArchivos
 
-Buscador de archivos de Office (Word, Excel, PowerPoint, LibreOffice) y PDF **solo por nombre**, con resultado mientras escribes, fichas con nombre/tipo/fechas/peso y lista navegable con teclado (↑↓, Enter para abrir) y ratón (doble clic). Interfaz TUI en Python + [Textual](https://textual.textualize.io). Windows y Ubuntu.
+Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras escribes**. Interfaz de terminal (TUI) ligera hecha en Python + [Textual](https://textual.textualize.io). Funciona en **Windows** y **Ubuntu**.
+
+![Vista previa](docs/vista_previa.svg)
+
+## Características
+
+- 🔍 Búsqueda por nombre completo o parcial, filtrando al instante mientras tecleas.
+- 📄 Busca Word (`.doc/.docx/.docm`), Excel (`.xls/.xlsx/.xlsm`), PowerPoint (`.ppt/.pptx/.pptm`), PDF y **LibreOffice** (`.odt/.ods/.odp`).
+- 📊 Cada resultado muestra: **nombre, tipo, fecha de creación, fecha de modificación y peso**.
+- 🎯 Lista ordenada por nombre (A→Z), navegable con **flechas y ratón**; `Enter` o doble clic abre el archivo con su aplicación predeterminada.
+- 💾 **Caché del escaneo**: el disco completo se escanea una vez y las siguientes ejecuciones arrancan al instante (`F5` para re-escanear).
+
+## Requisitos
+
+- Python 3.10 o superior.
 
 ## Instalación y uso
 
 ### Windows (CMD o PowerShell)
 
 ```cmd
-:: 1. Ir a la carpeta del proyecto
-cd "C:\Users\rcg70\OneDrive\Documentos\open code\buscadorArchivos"
+:: 1. Ve a la carpeta del proyecto
+cd buscadorArchivos
 
-:: 2. Instalar (dependencias + comando global "buscador")
+:: 2. Instala (dependencias + comando global "buscador")
 instalar.cmd
 
-:: 3. Usar desde cualquier terminal
+:: 3. Úsalo desde cualquier terminal
 buscador
 buscador "C:\Users\rcg70\Documents"
 ```
@@ -21,16 +35,15 @@ buscador "C:\Users\rcg70\Documents"
 ### Linux Ubuntu (terminal)
 
 ```bash
-# 1. Ir a la carpeta del proyecto (ajusta la ruta si la copiaste a otra parte)
-cd ~/Documentos/buscadorArchivos
+# 1. Ve a la carpeta del proyecto
+cd buscadorArchivos
 
-# 2. Instalar (dependencias + comando global "buscador")
+# 2. Instala (dependencias + comando global "buscador")
 bash instalar.sh
 
-# 3. Usar desde cualquier terminal
+# 3. Úsalo desde cualquier terminal
 buscador
-buscador /media/datos
-buscador ~/Documentos
+buscador /media/datos ~/Documentos
 ```
 
 Si `buscador` no se encuentra después de instalar, agrega `~/.local/bin` a tu PATH:
@@ -38,31 +51,47 @@ Si `buscador` no se encuentra después de instalar, agrega `~/.local/bin` a tu P
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 ```
 
-### Alternativa manual (sin el instalador)
+### Alternativa manual (sin el instalador, en ambos sistemas)
 
 ```bash
-# Igual en Windows (con python) y Ubuntu (con python3):
 python -m pip install -r requirements.txt
 python -m buscador            # todo el disco
 python -m buscador "C:\ruta"  # carpetas concretas
 ```
 
-Otra opción estándar con pip (requiere que tu Python tenga `Scripts` en PATH):
+Otra opción estándar (requiere que tu Python tenga `Scripts` en PATH):
 ```bash
 python -m pip install -e .
 buscador
 ```
 
-### Atajos
+## Cómo funciona
 
-- Escribe y filtra al instante ↑↓ para navegar.
-- **Enter / doble clic** abre el archivo.
-- **F5** re-escanea el disco y actualiza la caché.
-- **Ctrl+Q** salir.
+- Sin argumentos busca en todo el disco (todos los rígidos en Windows, `/` en Linux); con rutas, solo en esas carpetas.
+- El primer escaneo de todo el disco puede tardar unos minutos; el resultado se guarda en caché en tu perfil de usuario:
+  - Windows: `%LOCALAPPDATA%\buscador-archivo\cache.json`
+  - Ubuntu: `~/.cache/buscador-archivo/cache.json`
+- Los cambios del disco (archivos creados o borrados después del último escaneo) se reflejan con `F5`.
 
-## Caché
+## Atajos
 
-El primer escaneo de todo el disco puede tardar minutos; el resultado se guarda en
-`%LOCALAPPDATA%\buscador-archivo\cache.json` (Windows) o `~/.cache/buscador-archivo/cache.json` (Ubuntu).
-Las siguientes veces la app carga la caché al instante. Los cambios del disco (archivos nuevos o borrados)
-se reflejan con F5.
+| Tecla | Acción |
+|-------|--------|
+| (escribir) | Filtrar resultados al instante |
+| ↑ / ↓ | Moverse entre resultados |
+| Enter / doble clic | Abrir archivo seleccionado |
+| F5 | Re-escanear el disco y actualizar la caché |
+| Ctrl+Q | Salir |
+
+## Estructura del código
+
+```
+buscador/
+├── escaner.py   # recorre el disco, filtra extensiones, guarda y carga la caché
+├── app.py       # interfaz TUI (Textual): búsqueda en vivo + tabla de resultados
+└── __main__.py  # punto de entrada (python -m buscador)
+```
+
+## Licencia
+
+MIT
