@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "buscador-archivo"
+version = "1.0.0"
+description = "Buscador TUI de archivos de Office y PDF por nombre, con caché"
+requires-python = ">=3.10"
+dependencies = ["textual>=0.60"]
+
+[project.scripts]
+buscador = "buscador.app:main"
+
+[tool.setuptools.packages.find]
+include = ["buscador*"]

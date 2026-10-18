@@ -36,6 +36,11 @@ def fmt_num(n):
     return f"{n:,}".replace(",", ".")
 
 
+def _clave_orden(r):
+    """Orden alfabético por nombre (insensible a mayúsculas) + ruta de desempate."""
+    return (r.nombre_min, r.ruta)
+
+
 def abrir_archivo(ruta):
     """Abre el archivo con la aplicación predeterminada del sistema."""
     try:
@@ -88,6 +93,7 @@ class BuscadorApp(App):
         # Si hay caché válida para estas raíces, se muestra al instante
         cache = cargar_cache(self.raices)
         if cache:
+            cache.sort(key=_clave_orden)  # resultados siempre por nombre A→Z
             self.registros = cache
             self.rutas_conocidas = {r.ruta for r in cache}
             self.de_cache = True
@@ -131,7 +137,9 @@ class BuscadorApp(App):
             except queue.Empty:
                 break
             if isinstance(elemento, tuple) and elemento[0] == "fin":
-                self.registros = list(elemento[1])
+                lista = elemento[1]
+                lista.sort(key=_clave_orden)  # resultados siempre por nombre A→Z
+                self.registros = lista
                 self.rutas_conocidas = {r.ruta for r in self.registros}
                 self.escaneando = False
                 self.de_cache = False
