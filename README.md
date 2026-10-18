@@ -2,36 +2,63 @@
 
 Buscador de archivos de Office (Word, Excel, PowerPoint, LibreOffice) y PDF **solo por nombre**, con resultado mientras escribes, fichas con nombre/tipo/fechas/peso y lista navegable con teclado (↑↓, Enter para abrir) y ratón (doble clic). Interfaz TUI en Python + [Textual](https://textual.textualize.io). Windows y Ubuntu.
 
-## Instalación (terminal)
+## Instalación y uso
 
-**Windows (CMD o PowerShell):**
+### Windows (CMD o PowerShell)
+
 ```cmd
+:: 1. Ir a la carpeta del proyecto
+cd "C:\Users\rcg70\OneDrive\Documentos\open code\buscadorArchivos"
+
+:: 2. Instalar (dependencias + comando global "buscador")
 instalar.cmd
-```
-Deja el comando `buscador` disponible en cualquier terminal (crea un lanzador en `%LOCALAPPDATA%\Microsoft\WindowsApps`, sin permisos de administrador).
 
-**Ubuntu:**
+:: 3. Usar desde cualquier terminal
+buscador
+buscador "C:\Users\rcg70\Documents"
+```
+
+### Linux Ubuntu (terminal)
+
 ```bash
-bash instalar.sh
-```
-Crea `~/.local/bin/buscador` (asegúrate de tener `~/.local/bin` en tu PATH).
+# 1. Ir a la carpeta del proyecto (ajusta la ruta si la copiaste a otra parte)
+cd ~/Documentos/buscadorArchivos
 
-Alternativa universal (si la carpeta `Scripts` de tu Python está en PATH):
+# 2. Instalar (dependencias + comando global "buscador")
+bash instalar.sh
+
+# 3. Usar desde cualquier terminal
+buscador
+buscador /media/datos
+buscador ~/Documentos
+```
+
+Si `buscador` no se encuentra después de instalar, agrega `~/.local/bin` a tu PATH:
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+```
+
+### Alternativa manual (sin el instalador)
+
+```bash
+# Igual en Windows (con python) y Ubuntu (con python3):
+python -m pip install -r requirements.txt
+python -m buscador            # todo el disco
+python -m buscador "C:\ruta"  # carpetas concretas
+```
+
+Otra opción estándar con pip (requiere que tu Python tenga `Scripts` en PATH):
 ```bash
 python -m pip install -e .
+buscador
 ```
 
-## Uso
+### Atajos
 
-```
-buscador                  # busca en todo el disco (todos los rígidos en Windows, / en Linux)
-buscador "C:\Users\yo\Docs"   # busca solo en carpetas concretas
-```
-
-- Escribe en el campo de arriba: los resultados se filtran al vuelo.
-- ↑↓ para moverte, **Enter o doble clic** abre el archivo con la app predeterminada.
-- **F5** re-escanea el disco en segundo plano y actualiza la caché.
-- **Ctrl+Q** para salir.
+- Escribe y filtra al instante ↑↓ para navegar.
+- **Enter / doble clic** abre el archivo.
+- **F5** re-escanea el disco y actualiza la caché.
+- **Ctrl+Q** salir.
 
 ## Caché
 
