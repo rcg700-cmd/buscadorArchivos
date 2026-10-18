@@ -17,7 +17,26 @@ from textual.widgets import DataTable, Footer, Input, Label
 from .escaner import Registro, cargar_cache, iniciar_escaneo, raices_por_defecto
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
-ANCHOS_MINIMOS = {"Tipo": 14, "Creado": 18, "Modificado": 18, "Peso": 12}  # columnas separadas; Nombre absorbe el resto
+
+# Ancho final (en caracteres) de cada columna, divisor incluido.
+# El "Nombre" puede recortarse con "…"; el resto nunca necesita más.
+ANCHOS = {"Nombre": 46, "Tipo": 14, "Creado": 19, "Modificado": 19, "Peso": 12}
+SEP = " │ "  # separador visual entre columnas
+
+
+def _truncar(texto, n):
+    """Recorta el texto a n caracteres con '…' si es más largo."""
+    return texto if len(texto) <= n else texto[: max(0, n - 1)] + "…"
+
+
+def _celda(contenido, ancho):
+    """Celda de la tabla: texto alineado a la izquierda con separador final."""
+    return _truncar(contenido, ancho - 2).ljust(ancho - 2) + SEP
+
+
+def _celda_final(contenido, ancho):
+    """Última columna: alineada pero sin separador (termina la fila)."""
+    return _truncar(contenido, ancho).ljust(ancho)
 
 
 def fmt_tamano(n):
@@ -87,18 +106,15 @@ class BuscadorApp(App):
         yield Input(placeholder="Escribe el nombre (o parte) del archivo…", id="entrada")
         yield Label("", id="estado")
         tabla = DataTable(id="resultados", cursor_type="row", zebra_stripes=True)
-        tabla.add_columns("Nombre", "Tipo", "Creado", "Modificado", "Peso")
-        # Columnas con ancho mínimo garantizado (el Nombre absorbe el resto)
-        for clave, columna in tabla.columns.items():
-            etiqueta = getattr(columna, "label", None)
-            texto = getattr(etiqueta, "plain", str(etiqueta)) if etiqueta is not None else str(clave)
-            if texto in ANCHOS_MINIMOS:
-                try:
-                    columna.width = ANCHOS_MINIMOS[texto]
-                    if hasattr(columna, "auto_width"):
-                        columna.auto_width = False
-                except Exception:
-                    pass
+        # Encabezados construidos igual que las celdas: el separador '│'
+        # queda alineado entre encabezado y resultados.
+        tabla.add_columns(
+            _celda("Nombre", ANCHOS["Nombre"]),
+            _celda("Tipo", ANCHOS["Tipo"]),
+            _celda("Creado", ANCHOS["Creado"]),
+            _celda("Modificado", ANCHOS["Modificado"]),
+            _celda_final("Peso", ANCHOS["Peso"]),
+        )
         yield tabla
         yield Footer()
 
@@ -191,7 +207,11 @@ class BuscadorApp(App):
         ocultas = len(encontradas) - len(self.mostradas)
         for i, r in enumerate(self.mostradas):
             tabla.add_row(
-                (r.nombre, r.tipo, fmt_fecha(r.creado), fmt_fecha(r.modificado), fmt_tamano(r.tamano)),
+                _celda(r.nombre, ANCHOS["Nombre"]),
+                _celda(r.tipo, ANCHOS["Tipo"]),
+                _celda(fmt_fecha(r.creado), ANCHOS["Creado"]),
+                _celda(fmt_fecha(r.modificado), ANCHOS["Modificado"]),
+                _celda_final(fmt_tamano(r.tamano), ANCHOS["Peso"]),
                 key=str(i),
             )
         try:
