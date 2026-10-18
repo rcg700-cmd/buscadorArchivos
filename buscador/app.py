@@ -11,9 +11,10 @@ import subprocess
 
 from textual import on
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.widgets import DataTable, Footer, Input, Label
 
-from .escaner import Registro, iniciar_escaneo, raices_por_defecto
+from .escaner import Registro, cargar_cache, iniciar_escaneo, raices_por_defecto
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
 
@@ -59,15 +60,19 @@ class BuscadorApp(App):
     #resultados { height: 1fr; }
     """
 
+    BINDINGS = [Binding("f5", "reescanear", "Reescanear el disco", show=True, priority=True)]
+
     def __init__(self, raices=None):
         super().__init__()
         self.raices = tuple(raices) if raices else raices_por_defecto()
         self.cola = queue.Queue()  # registros que llegan del hilo de escaneo
-        self.registros = []  # todos los archivos encontrados
+        self.registros = []  # todos los archivos conocidos (caché + escaneo)
         self.mostradas = []  # los que pasan el filtro actual (máx. MAX_MOSTRADOS)
+        self.rutas_conocidas = set()  # para no duplicar al fusionar escaneo+caché
         self.texto = ""  # filtro actual
-        self.escaneando = True
-        self._firma = None  # (texto, total, escaneando) para saber si cambió la vista
+        self.escaneando = False
+        self.de_cache = False  # True mientras la vista provenga (solo) de la caché
+        self._firma = None  # (texto, total, escaneando, de_cache) para saber si cambió la vista
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Escribe el nombre (o parte) del archivo…", id="entrada")
@@ -78,10 +83,34 @@ class BuscadorApp(App):
         yield Footer()
 
     def on_mount(self):
-        # Arranca el escaneo en segundo plano y revisa la cola 4 veces/segundo
+        # Revisa la cola 4 veces/segundo (activa solo cuando haya escaneo)
+        self.set_interval(0.25, self._recibir)
+        # Si hay caché válida para estas raíces, se muestra al instante
+        cache = cargar_cache(self.raices)
+        if cache:
+            self.registros = cache
+            self.rutas_conocidas = {r.ruta for r in cache}
+            self.de_cache = True
+            self._refrescar()
+        else:
+            self._comenzar_escaneo()
+
+    def _comenzar_escaneo(self):
+        """Inicia un escaneo en segundo plano sin borrar lo ya visible."""
+        self.escaneando = True
         self.hilo, self.cola = iniciar_escaneo(self.raices)
         self.hilo.start()
-        self.set_interval(0.25, self._recibir)
+        self._firma = None
+        self._refrescar()
+
+    def action_reescanear(self):
+        """F5: fuerza un re-escaneo completo (actualiza la caché al terminar)."""
+        if self.escaneando:
+            self.notify("Ya hay un escaneo en curso", severity="warning")
+            return
+        self.de_cache = True
+        self.notify("Reescaneando el disco… (F5). Los resultados seguirán visibles")
+        self._comenzar_escaneo()
 
     @on(Input.Changed)
     def _cambio_texto(self, event: Input.Changed):
@@ -89,20 +118,32 @@ class BuscadorApp(App):
         self._refrescar()
 
     def _recibir(self):
-        """Mueve los registros nuevos del hilo de escaneo a la lista principal."""
+        """Mueve los registros nuevos del hilo de escaneo a la lista principal.
+
+        Si hay caché visible, se fusiona sin duplicados (por ruta); al llegar la
+        señal de fin se reemplaza todo por la lista fresca del escáner.
+        """
         nuevo = False
-        analizando = True
-        while analizando:
+        fin = False
+        while True:
             try:
-                r = self.cola.get_nowait()
+                elemento = self.cola.get_nowait()
             except queue.Empty:
                 break
-            if r is None:  # señal: escaneo terminado
+            if isinstance(elemento, tuple) and elemento[0] == "fin":
+                self.registros = list(elemento[1])
+                self.rutas_conocidas = {r.ruta for r in self.registros}
                 self.escaneando = False
+                self.de_cache = False
+                fin = True
                 break
+            r = elemento
+            if r.ruta in self.rutas_conocidas:  # ya visible (vía caché o antes)
+                continue
+            self.rutas_conocidas.add(r.ruta)
             self.registros.append(r)
             nuevo = True
-        if nuevo or not self.escaneando:
+        if nuevo or fin:
             self._refrescar()
 
     def _encontradas(self):
@@ -115,7 +156,7 @@ class BuscadorApp(App):
     def _refrescar(self):
         """Reconstruye la tabla si el filtro o el escaneo cambiaron."""
         encontradas = self._encontradas()
-        firma = (self.texto, len(encontradas), self.escaneando)
+        firma = (self.texto, len(encontradas), self.escaneando, self.de_cache)
         if firma == self._firma:
             return
         self._firma = firma
@@ -140,6 +181,8 @@ class BuscadorApp(App):
             estado += f" — mostrando las primeras {fmt_num(len(self.mostradas))} (sigue escribiendo)"
         if self.escaneando:
             estado = "⏳ Escaneando el disco… " + estado
+        elif self.de_cache:
+            estado = "💾 Datos de caché (F5 para reescanear). " + estado
         self.query_one("#estado", Label).update(estado)
 
     @on(DataTable.RowSelected)
