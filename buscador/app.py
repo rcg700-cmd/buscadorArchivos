@@ -66,7 +66,10 @@ class BuscadorApp(App):
     #resultados { height: 1fr; width: 1fr; margin: 1 3 0 3; border: round $panel; }
     """
 
-    BINDINGS = [Binding("f5", "reescanear", "Reescanear el disco", show=True, priority=True)]
+    BINDINGS = [
+        Binding("f5", "reescanear", "Reescanear el disco", show=True, priority=True),
+        Binding("escape", "quit", "Salir a la terminal", show=True, priority=True),
+    ]
 
     def __init__(self, raices=None):
         super().__init__()
