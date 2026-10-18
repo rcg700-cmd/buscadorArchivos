@@ -17,6 +17,7 @@ from textual.widgets import DataTable, Footer, Input, Label
 from .escaner import Registro, cargar_cache, iniciar_escaneo, raices_por_defecto
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
+ANCHOS_MINIMOS = {"Tipo": 14, "Creado": 18, "Modificado": 18, "Peso": 12}  # columnas separadas; Nombre absorbe el resto
 
 
 def fmt_tamano(n):
@@ -60,9 +61,9 @@ class BuscadorApp(App):
     """App principal: buscar archivos por nombre en todo el disco."""
 
     CSS = """
-    #entrada { width: 100%; }
-    #estado { width: 100%; padding: 0 1; color: $text; }
-    #resultados { height: 1fr; }
+    #entrada { width: 1fr; margin: 1 3 0 3; }
+    #estado { width: 100%; padding: 0 4; margin-top: 1; color: $text-muted; }
+    #resultados { height: 1fr; width: 1fr; margin: 1 3 0 3; border: round $panel; }
     """
 
     BINDINGS = [Binding("f5", "reescanear", "Reescanear el disco", show=True, priority=True)]
@@ -84,6 +85,17 @@ class BuscadorApp(App):
         yield Label("", id="estado")
         tabla = DataTable(id="resultados", cursor_type="row", zebra_stripes=True)
         tabla.add_columns("Nombre", "Tipo", "Creado", "Modificado", "Peso")
+        # Columnas con ancho mínimo garantizado (el Nombre absorbe el resto)
+        for clave, columna in tabla.columns.items():
+            etiqueta = getattr(columna, "label", None)
+            texto = getattr(etiqueta, "plain", str(etiqueta)) if etiqueta is not None else str(clave)
+            if texto in ANCHOS_MINIMOS:
+                try:
+                    columna.width = ANCHOS_MINIMOS[texto]
+                    if hasattr(columna, "auto_width"):
+                        columna.auto_width = False
+                except Exception:
+                    pass
         yield tabla
         yield Footer()
 
