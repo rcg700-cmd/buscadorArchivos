@@ -12,7 +12,9 @@ Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras e
 - 🧹 **Ctrl+D** borra las cachés y re-escanea de cero (también disponible: `buscador --borrar-cache`).
 - 📄 Busca Word (`.doc/.docx/.docm`), Excel (`.xls/.xlsx/.xlsm`), PowerPoint (`.ppt/.pptx/.pptm`), PDF y **LibreOffice** (`.odt/.ods/.odp`).
 - 📊 Cada resultado muestra: **nombre, tipo, fecha de creación, fecha de modificación y peso**.
+- 🎨 **Nueva interfaz:** cada tipo de archivo lleva **icono y color propios** (Word azul, Excel verde, PowerPoint naranja, PDF rojo, LibreOffice teal) y el orden activo se ve con una **flecha ▲/▼ en el encabezado** de la columna. Durante el escaneo se ve cuántas carpetas quedan en cola.
 - 🎯 Orden **por nombre (A→Z) por defecto** y configurable con `F8`/`F9` (peso, fechas…); lista navegable con **flechas y ratón**; `Enter` o doble clic abre el archivo con su aplicación predeterminada.
+- 🌗 **Ctrl+T** recorre los temas de colores disponibles (claros y oscuros); la preferencia se recuerda entre sesiones.
 - 💾 **Caché del escaneo**: el disco completo se escanea una vez y las siguientes ejecuciones arrancan al instante (`F5` para re-escanear).
 
 ## Requisitos
@@ -75,6 +77,7 @@ buscador
   - Windows: `%LOCALAPPDATA%\buscador-archivo\cache_<hash>.json`
   - Ubuntu: `~/.cache/buscador-archivo/cache_<hash>.json`
 - Los cambios del disco (archivos creados o borrados después del último escaneo) se reflejan con `F5`.
+- El tema elegido con `Ctrl+T` se guarda en `preferencias.json` junto a las cachés.
 
 ## Atajos
 
@@ -87,6 +90,7 @@ buscador
 | Enter / doble clic | Abrir archivo seleccionado |
 | Ctrl+O | Abrir la carpeta contenedora del archivo resaltado |
 | Ctrl+C | Copiar la ruta completa al portapapeles |
+| Ctrl+T | Cambiar el tema de colores (se recuerda entre sesiones) |
 | F2 / F3 / F4 | Filtrar: solo Word / Excel / PowerPoint |
 | F6 / F7 | Filtrar: solo PDF / LibreOffice (se apilan con lo escrito) |
 | F8 / F9 | Cambiar la columna de orden / alternar ascendente‑descendente |

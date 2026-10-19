@@ -6,12 +6,15 @@
 """
 
 import fnmatch
+import json
 import os
 import queue
 import re
 import subprocess
 from pathlib import Path
 
+from rich.cells import cell_len
+from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -30,20 +33,58 @@ SEP = " │ "  # separador visual entre columnas
 COLUMNAS_ORDEN = ("nombre", "modificado", "tamano", "creado")
 ETIQUETA_ORDEN = {"nombre": "Nombre", "modificado": "Modificado", "tamano": "Peso", "creado": "Creado"}
 
+# Icono y color por tipo (colores brillantes de cada suite para fondo oscuro/claro)
+ICONO_TIPO = {"Word": "📝", "Excel": "📊", "PowerPoint": "📽️", "PDF": "📕", "LibreOffice": "🐧"}
+ESTILO_TIPO = {
+    "Word": "bold #58a6ff",
+    "Excel": "bold #3fb950",
+    "PowerPoint": "bold #f0883e",
+    "PDF": "bold #f85149",
+    "LibreOffice": "bold #39c5cf",
+}
+ESTILO_META = "#9099a2"  # fechas y peso en gris tenue: el nombre es lo protagonista
 
-def _truncar(texto, n):
-    """Recorta el texto a n caracteres con '…' si es más largo."""
-    return texto if len(texto) <= n else texto[: max(0, n - 1)] + "…"
+# Columnas de la tabla: clave lógica, título y ancho (los encabezados se
+# regeneran en _refrescar para mostrar la flecha de orden en la columna activa).
+COLUMNAS = (
+    ("nombre", "Nombre", ANCHOS["Nombre"]),
+    ("tipo", "Tipo", ANCHOS["Tipo"]),
+    ("creado", "Creado", ANCHOS["Creado"]),
+    ("modificado", "Modificado", ANCHOS["Modificado"]),
+    ("tamano", "Peso", ANCHOS["Peso"]),
+    ("carpeta", "Carpeta", ANCHOS["Carpeta"]),
+)
 
 
-def _celda(contenido, ancho):
-    """Celda de la tabla: texto alineado a la izquierda con separador final."""
-    return _truncar(contenido, ancho - 2).ljust(ancho - 2) + SEP
+def _ancho(texto, n, derecha=False):
+    """Ajusta `texto` a exactamente n celdas de pantalla.
+
+    Se mide con cell_len (los iconos/emoji ocupan 2 celdas, no 1) para que los
+    separadores │ queden alineados en todas las filas. Recorta con '…' o
+    rellena con espacios a la derecha (o izquierda si `derecha`).
+    """
+    if cell_len(texto) > n:
+        while texto and cell_len(texto) > max(0, n - 1):
+            texto = texto[:-1]
+        texto += "…"
+    relleno = " " * (n - cell_len(texto))
+    return relleno + texto if derecha else texto + relleno
 
 
-def _celda_final(contenido, ancho):
+def _celda(contenido, ancho, estilo="", derecha=False):
+    """Celda de la tabla: contenido alineado con estilo Rich + separador."""
+    return Text(_ancho(contenido, ancho - 2, derecha), estilo).append(SEP)
+
+
+def _celda_final(contenido, ancho, estilo="", derecha=False):
     """Última columna: alineada pero sin separador (termina la fila)."""
-    return _truncar(contenido, ancho).ljust(ancho)
+    return Text(_ancho(contenido, ancho, derecha), estilo)
+
+
+def _encabezado(titulo, ancho, flecha=""):
+    """Encabezado de columna; la columna de orden activa lleva ▲/▼ al final."""
+    contenido = f"{titulo} {flecha}" if flecha else titulo
+    return _celda(contenido, ancho)
 
 
 def fmt_tamano(n):
@@ -106,6 +147,32 @@ def _carpetas_habituales():
             vistas.add(clave)
             encontradas.append(ruta)
     return encontradas
+
+
+# ------------------------------------------------------------- preferencias
+
+
+def _ruta_preferencias():
+    """preferencias.json vive junto a las cachés (perfil de usuario)."""
+    from .escaner import _carpeta_cache
+
+    return _carpeta_cache() / "preferencias.json"
+
+
+def _cargar_preferencias():
+    try:
+        return json.loads(_ruta_preferencias().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _guardar_preferencias(prefs):
+    try:
+        ruta = _ruta_preferencias()
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_text(json.dumps(prefs), encoding="utf-8")
+    except OSError:
+        pass  # la preferencia es un extra: si falla, no interfiere
 
 
 class CarpetaScreen(ModalScreen):
@@ -190,44 +257,60 @@ class AyudaScreen(ModalScreen):
         Binding("f1", "cerrar", show=False, priority=True),
     ]
 
-    TEXTO = """\
-[b]Buscador de archivos de Office y PDF[/b]
-Busca por nombre y muestra tipo, fechas, peso y carpeta. Orden A→Z.
+    ATAJOS = (
+        ("(escribir)", "Filtra los resultados al instante mientras tecleas"),
+        ("\\* / ?", "Comodines: informe\\*.docx, \\*.pdf, plan?2026"),
+        ("/", "Panel de carpetas habituales (elige dónde buscar)"),
+        ("↑ / ↓", "Moverse por los resultados"),
+        ("Enter / doble clic", "Abrir el archivo con su aplicación"),
+        ("Ctrl+O", "Abrir la carpeta contenedora del archivo resaltado"),
+        ("Ctrl+C", "Copiar la ruta completa al portapapeles"),
+        ("Ctrl+T", "Cambiar el tema de colores (se recuerda entre sesiones)"),
+        ("F2 / F3 / F4", "Filtrar: solo Word / Excel / PowerPoint"),
+        ("F6 / F7", "Filtrar: solo PDF / LibreOffice (se apilan)"),
+        ("F8 / F9", "Orden por columna / ascendente-descendente"),
+        ("F5", "Reescanear el ámbito actual y actualizar caché"),
+        ("Ctrl+D", "Borrar caché y re-escanear de cero"),
+        ("Esc (en panel)", "Cerrar el panel abierto sin elegir"),
+        ("Esc / Ctrl+Q", "Salir a la terminal"),
+        ("F1", "Esta ayuda"),
+    )
 
-[yellow b]ATAJOS[/]
-  (escribir)          Filtra los resultados al instante mientras tecleas
-  \\* / ?              Comodines: informe\\*.docx, \\*.pdf, plan?2026
-  /                   Panel de carpetas habituales (elige dónde buscar)
-  ↑ / ↓               Moverse por los resultados
-  Enter / doble clic  Abrir el archivo con su aplicación
-  Ctrl+O              Abrir la carpeta contenedora del archivo resaltado
-  Ctrl+C              Copiar la ruta completa al portapapeles
-  F2 / F3 / F4        Filtrar: solo Word / Excel / PowerPoint
-  F6 / F7             Filtrar: solo PDF / LibreOffice (se apilan)
-  F8 / F9             Orden por columna / ascendente-descendente
-  F5                  Reescanear el ámbito actual y actualizar caché
-  Ctrl+D              Borrar caché y re-escanear de cero
-  Esc (en panel)      Cerrar el panel abierto sin elegir
-  Esc / Ctrl+Q        Salir a la terminal
-  F1                  Esta ayuda
-
-[yellow b]FUNCIONES[/]
-  • Busca Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), PDF
-    y LibreOffice (.odt/.ods/.odp) [i]por nombre del archivo[/i].
-  • Escaneo en paralelo del disco con resultados en vivo; la búsqueda
-    funciona mientras escanea.
-  • Caché por ámbito (disco completo y cada carpeta elegida con el panel
-    '/'): al salir y volver a entrar retoma al instante.
-  • Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el
-    texto se interpreta como patrón (como el 'dir' de CMD).
-  • Los filtros de tipo (F2..F7) se combinan con lo que escribas.
-  • Carpetas a ignorar: edita excluir.txt (junto a las cachés, carpeta
-    buscador-archivo en tu perfil de usuario); admite \\* y ?.
-  • Cada resultado abre el archivo real; nada se descarga ni modifica.
-"""
+    FUNCIONES = (
+        "• Busca Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx),\n"
+        "  PDF y LibreOffice (.odt/.ods/.odp) [i]por nombre del archivo[/].",
+        "• Escaneo en paralelo del disco con resultados en vivo; la búsqueda\n"
+        "  funciona mientras escanea y verá cuántas carpetas quedan.",
+        "• Caché por ámbito (disco completo y cada carpeta elegida con el panel\n"
+        "  '/'): al salir y volver a entrar retoma al instante.",
+        "• Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el\n"
+        "  texto se interpreta como patrón (como el 'dir' de CMD).",
+        "• Los filtros de tipo (F2..F7) se combinan con lo que escribas.",
+        "• Ctrl+T recorre los temas de colores (claros, oscuros…); se recuerda\n"
+        "  entre sesiones.",
+        "• Carpetas a ignorar: edita excluir.txt (junto a las cachés, carpeta\n"
+        "  buscador-archivo en tu perfil de usuario); admite \\* y ?.",
+        "• Cada resultado abre el archivo real; nada se descarga ni modifica.",
+    )
 
     def compose(self):
-        yield Static(self.TEXTO, id="ayuda", expand=True)
+        from rich.console import Group
+        from rich.table import Table as RichTable
+
+        tabla_atajos = RichTable(show_header=False, box=None, padding=(0, 2), pad_edge=False)
+        for atajo, descripcion in self.ATAJOS:
+            tabla_atajos.add_row(f"[yellow b]{atajo}[/]", descripcion)
+        renderable = Group(
+            "[b]Buscador de archivos de Office y PDF[/b]",
+            "Busca por nombre y muestra tipo, fechas, peso y carpeta.",
+            "",
+            "[yellow b]ATAJOS[/]  ([i]Esc vuelve a la app[/])",
+            tabla_atajos,
+            "",
+            "[yellow b]FUNCIONES[/]",
+            "\n".join(self.FUNCIONES),
+        )
+        yield Static(renderable, id="ayuda", expand=True)
 
     def action_cerrar(self):
         self.dismiss()
@@ -250,6 +333,7 @@ class BuscadorApp(App):
         Binding("escape", "quit", "Salir a la terminal", show=True),
         Binding("ctrl+o", "abrir_carpeta", "Abrir carpeta del archivo", show=False, priority=True),
         Binding("ctrl+c", "copiar_ruta", "Copiar ruta", show=False, priority=True),
+        Binding("ctrl+t", "cambiar_tema", "Cambiar tema", show=True, priority=True),
         Binding("f2", "filtro_word", "Solo Word", show=False),
         Binding("f3", "filtro_excel", "Solo Excel", show=False),
         Binding("f4", "filtro_power", "Solo PowerPoint", show=False),
@@ -272,31 +356,48 @@ class BuscadorApp(App):
         self.escaneando = False
         self.de_cache = False  # True mientras la vista provenga (solo) de la caché
         self.panel_abierto = False  # el panel '/' está mostrándose
+        self._progreso = None  # (archivos, carpetas en cola) informado por el escáner
+        self._visibles_estado = (0, 0)  # (visibles, ocultas) del último refresco
+        self._claves_columna = {}  # clave lógica -> ColumnKey del DataTable
         self._firma = None  # (texto, total, escaneando, de_cache) para saber si cambió la vista
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Escribe el nombre… (/ carpetas · * ? patrones)", id="entrada")
         yield Label("", id="estado")
         tabla = DataTable(id="resultados", cursor_type="row", zebra_stripes=True)
-        # Encabezados construidos igual que las celdas: el separador '│'
-        # queda alineado entre encabezado y resultados.
-        tabla.add_columns(
-            _celda("Nombre", ANCHOS["Nombre"]),
-            _celda("Tipo", ANCHOS["Tipo"]),
-            _celda("Creado", ANCHOS["Creado"]),
-            _celda("Modificado", ANCHOS["Modificado"]),
-            _celda("Peso", ANCHOS["Peso"]),
-            _celda_final("Carpeta", ANCHOS["Carpeta"]),
-        )
+        # Encabezados con las mismas medidas que las celdas: el separador '│'
+        # queda alineado. La columna de orden (F8/F9) recibe su ▲/▼ en _refrescar.
+        for clave, titulo, ancho in COLUMNAS:
+            self._claves_columna[clave] = tabla.add_columns(
+                (_encabezado(titulo, ancho), clave)
+            )[0]
+        tabla.border_title = "Resultados"
         yield tabla
         # Ruta completa del archivo resaltado (visible abajo, sin recortar en la tabla)
         yield Label("", id="ruta")
         yield Footer()
 
     def on_mount(self):
+        # Tema recordado en preferencias.json (Ctrl+T lo cambia)
+        tema = _cargar_preferencias().get("tema")
+        if tema and tema in self.available_themes and tema != self.theme:
+            self.theme = tema
         # Revisa la cola 4 veces/segundo (activa solo cuando haya escaneo)
         self.set_interval(0.25, self._recibir)
         self._aplicar_raices(self.raices)
+
+    def action_cambiar_tema(self):
+        """Ctrl+T: recorre los temas disponibles y recuerda el elegido."""
+        temas = sorted(self.available_themes)
+        try:
+            nuevo = temas[(temas.index(self.theme) + 1) % len(temas)]
+        except ValueError:
+            nuevo = temas[0]
+        self.theme = nuevo
+        prefs = _cargar_preferencias()
+        prefs["tema"] = nuevo
+        _guardar_preferencias(prefs)
+        self.notify(f"Tema: {nuevo}")
 
     def _aplicar_raices(self, raices):
         """Cambia el ámbito de búsqueda usando su caché si ya existe."""
@@ -304,6 +405,7 @@ class BuscadorApp(App):
         self.registros = []
         self.rutas_conocidas = set()
         self.de_cache = False
+        self._progreso = None
         cache = cargar_cache(self.raices)
         if cache:
             _ordenar(cache, self.orden)  # respeta el orden actual (F8/F9)
@@ -471,20 +573,27 @@ class BuscadorApp(App):
         """
         nuevo = False
         fin = False
+        hubo_progreso = False
         while True:
             try:
                 elemento = self.cola.get_nowait()
             except queue.Empty:
                 break
-            if isinstance(elemento, tuple) and elemento[0] == "fin":
-                lista = elemento[1]
-                _ordenar(lista, self.orden)  # respeta el orden actual (F8/F9)
-                self.registros = lista
-                self.rutas_conocidas = {r.ruta for r in self.registros}
-                self.escaneando = False
-                self.de_cache = False
-                fin = True
-                break
+            if isinstance(elemento, tuple):
+                if elemento[0] == "fin":
+                    lista = elemento[1]
+                    _ordenar(lista, self.orden)  # respeta el orden actual (F8/F9)
+                    self.registros = lista
+                    self.rutas_conocidas = {r.ruta for r in self.registros}
+                    self.escaneando = False
+                    self.de_cache = False
+                    self._progreso = None
+                    fin = True
+                    break
+                if elemento[0] == "progreso":
+                    self._progreso = (elemento[1], elemento[2])
+                    hubo_progreso = True
+                    continue
             r = elemento
             if r.ruta in self.rutas_conocidas:  # ya visible (vía caché o antes)
                 continue
@@ -493,6 +602,9 @@ class BuscadorApp(App):
             nuevo = True
         if nuevo or fin:
             self._refrescar()
+        elif hubo_progreso and self.escaneando:
+            # Solo la barra de estado (barato): no toca la tabla
+            self._pinta_estado(*self._visibles_estado)
 
     def _encontradas(self):
         """Filtra por nombre y tipo según el estado actual.
@@ -530,17 +642,23 @@ class BuscadorApp(App):
 
         tabla = self.query_one("#resultados", DataTable)
         fila_cursor = tabla.cursor_row  # para no perder la posición al rellenar
+        # Flecha de orden (▲/▼) en el encabezado de la columna activa
+        flecha = "▲" if not self.orden[1] else "▼"
+        for clave, titulo, ancho_col in COLUMNAS:
+            tabla.columns[self._claves_columna[clave]].label = _encabezado(
+                titulo, ancho_col, flecha=flecha if clave == self.orden[0] else ""
+            )
         tabla.clear()
         self.mostradas = encontradas[:MAX_MOSTRADOS]
         ocultas = len(encontradas) - len(self.mostradas)
         for i, r in enumerate(self.mostradas):
             tabla.add_row(
-                _celda(r.nombre, ANCHOS["Nombre"]),
-                _celda(r.tipo, ANCHOS["Tipo"]),
-                _celda(fmt_fecha(r.creado), ANCHOS["Creado"]),
-                _celda(fmt_fecha(r.modificado), ANCHOS["Modificado"]),
-                _celda(fmt_tamano(r.tamano), ANCHOS["Peso"]),
-                _celda_final(os.path.dirname(r.ruta), ANCHOS["Carpeta"]),
+                _celda(f"{ICONO_TIPO.get(r.tipo, '')} {r.nombre}", ANCHOS["Nombre"]),
+                _celda(r.tipo, ANCHOS["Tipo"], ESTILO_TIPO.get(r.tipo, "")),
+                _celda(fmt_fecha(r.creado), ANCHOS["Creado"], ESTILO_META),
+                _celda(fmt_fecha(r.modificado), ANCHOS["Modificado"], ESTILO_META),
+                _celda(fmt_tamano(r.tamano), ANCHOS["Peso"], ESTILO_META, derecha=True),
+                _celda_final(os.path.dirname(r.ruta), ANCHOS["Carpeta"], ESTILO_META),
                 key=str(i),
             )
         try:
@@ -548,22 +666,35 @@ class BuscadorApp(App):
         except Exception:
             pass
 
-        estado = f"Encontrados: {fmt_num(len(self.registros))} archivos de Office/PDF"
+        # Borde de la tabla con el total visible (independiente de la barra de estado)
+        titulo_borde = f"Resultados: {fmt_num(len(encontradas))}"
+        if ocultas > 0:
+            titulo_borde += f" · {fmt_num(len(self.mostradas))} en pantalla"
+        tabla.border_title = titulo_borde
+
+        self._visibles_estado = (len(encontradas), ocultas)
+        self._pinta_estado(len(encontradas), ocultas)
+        self._actualizar_ruta()
+
+    def _pinta_estado(self, n_visibles, ocultas):
+        """Barra de estado a todo color: escaneo amarillo, caché cian, filtros verdes."""
+        estado = f"[b]Encontrados:[/] {fmt_num(len(self.registros))} archivos de Office/PDF"
         if self.texto:
-            estado += f" · Visibles: {fmt_num(len(encontradas))}"
+            estado += f" · Visibles: {fmt_num(n_visibles)}"
         if self.filtros:
-            estado += " · Filtros: " + "+".join(sorted(self.filtros))
-        estado += f" · Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}"
+            estado += " · [green b]Filtros: " + "+".join(sorted(self.filtros)) + "[/]"
+        estado += f" · [magenta]Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}[/]"
         if ocultas > 0:
             estado += f" — las primeras {fmt_num(len(self.mostradas))} (sigue escribiendo)"
         if self.escaneando:
-            estado = "⏳ Escaneando… " + estado
+            carpetas = self._progreso[1] if self._progreso else 0
+            extra = f" — {fmt_num(carpetas)} carpetas en cola" if carpetas > 0 else ""
+            estado = f"[yellow b]⏳ Escaneando…[/]{extra}. " + estado
         elif self.de_cache:
-            estado = "💾 Datos de caché (F5 re-escanear). " + estado
+            estado = "[cyan]💾 Datos de caché[/] ([i]F5 re-escanear[/]). " + estado
         ambito = "todo el disco" if self.raices == tuple(raices_por_defecto()) else ", ".join(self.raices)
-        estado += f" · Ámbito: {ambito}"
+        estado += f" · [i]Ámbito: {ambito}[/]"
         self.query_one("#estado", Label).update(estado)
-        self._actualizar_ruta()
 
     def _ruta_resaltada(self):
         """Ruta completa del archivo resaltado en la tabla ('' si no hay)."""

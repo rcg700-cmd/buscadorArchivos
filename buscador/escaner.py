@@ -151,6 +151,9 @@ def escanear(raices, salida, guardar=True):
                 salida.put(encontrados[-1])
         except queue.Empty:
             pass
+        with lock:
+            cola_pend = pendientes[0]
+        salida.put(("progreso", len(encontrados), max(0, cola_pend)))
         parado.wait(0.1)
     # Recolecta lo que quede antes de anunciar el fin
     while True:
