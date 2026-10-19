@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+build/
+dist/
+*.spec
+build_log.txt
+lista_pyz.txt
+buscador-windows-*.zip

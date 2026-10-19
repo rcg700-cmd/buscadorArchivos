@@ -1,0 +1,29 @@
+Buscador de archivos de Office y PDF (v1.0.0)
+==============================================
+
+Archivo: buscador.exe — ejecutable de Windows, NO requiere instalar Python ni nada más.
+
+Cómo usarlo
+-----------
+1. Copia buscador.exe donde quieras (o deja el zip donde lo descargaste).
+2. Haz doble clic, o mejor abre un CMD/PowerShell y escribe:
+       .\buscador.exe
+3. La primera vez escanea el disco completo (puede tardar unos minutos);
+   luego la caché hace que arranque al instante.
+
+Dentro del programa
+-------------------
+- Escribe para buscar por nombre (filtra al instante).
+- ↑ / ↓ para navegar, Enter o doble clic abre el archivo.
+- F5: re-escanear el disco y actualizar la caché.
+- Esc o Ctrl+Q: salir y volver a la terminal.
+
+Con carpetas concretas
+----------------------
+buscador.exe "C:\Users\tuusuario\Documents"
+buscador.exe D:\Docs E:\Archivos
+
+Formatos: Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx),
+PDF y LibreOffice (.odt/.ods/.odp).
+Código fuente y actualizaciones: https://github.com/rcg700-cmd/buscadorArchivos
+Licencia MIT.
