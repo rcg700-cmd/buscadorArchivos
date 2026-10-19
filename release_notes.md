@@ -1,21 +1,20 @@
-# v1.1.2 — retoque visual completo
+# v1.1.3 — caché verificada al abrir
 
-Sobre la base v1.1.0 (búsqueda por nombre, filtros, orden, exclusiones, caché por ámbito) se añade una pasada estética:
+Sobre la base v1.1.2 (estética completa) se añade una mejora funcional de la caché:
 
 ## Novedades
 
-- 🎨 **Iconos y colores por tipo en la tabla:** 📝 Word azul, 📊 Excel verde, 📽️ PowerPoint naranja, 📕 PDF rojo, 🐧 LibreOffice teal. Fechas, peso y carpeta en gris tenue; el peso alineado a la derecha.
-- 🔺 **Flecha de orden en el encabezado** de la columna activa (▲ ascendente, ▼ descendente), además del indicador en la barra de estado.
-- 🪟 **Borde de la tabla con título** `Resultados: N` (el total visible siempre a la vista).
-- 🌈 **Barra de estado a todo color:** ⏳ escaneando en amarillo —ahora informa cuántas **carpetas quedan en cola**—, 💾 caché en cian, filtros en verde, orden en magenta.
-- 🌗 **Ctrl+T:** recorre los temas de colores de Textual (claros y oscuros, tokio-night, dracula…) y **recuerda tu elección entre sesiones** (preferencias.json junto a las cachés).
-- ❓ **Ayuda F1 rediseñada:** tabla de atajos a dos columnas y secciones coloreadas, ahora incluye Ctrl+T.
+- ✅ **Validación incremental de la caché:** al abrir la app (o cambiar de carpeta con `/`), en segundo plano se comprueba que cada archivo de la caché siga existiendo.
+  - Los archivos **borrados** desde el último escaneo desaparecen de la lista al momento, con un aviso (`Caché: 3 archivos ya no existen y se descartaron…`), y la caché en disco se limpia también.
+  - **Sin re-escanear ni retrasar el arranque**: la lista se muestra al instante y la limpieza llega después (una comprobación ligera por archivo).
+  - Si mientras valida haces F5 o cambias de carpeta, ese resultado se cancela y no interfiere.
+  - Los archivos **nuevos** siguen necesitando `F5` (detectarlos sin escanear es imposible).
 
-Sin cambios en cómo escanea ni busca: solo la cara.
+Sin cambios en la búsqueda ni en los atajos.
 
 ## Descargas
 
-- **Windows (sin instalar nada):** `buscador-windows-1.1.2.zip` → contiene `buscador.exe` (doble clic y listo).
+- **Windows (sin instalar nada):** `buscador-windows-1.1.3.zip` → contiene `buscador.exe` (doble clic y listo).
 - **Código fuente:** clona este repo y sigue el README (`instalar.cmd` / `instalar.sh`).
 
 ## Formatos buscados
