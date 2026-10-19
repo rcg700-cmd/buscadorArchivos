@@ -86,6 +86,7 @@ buscador
 | Enter / doble clic | Abrir archivo seleccionado |
 | F5 | Re-escanear el disco y actualizar la caché |
 | Ctrl+D | Borrar caché y re-escanear de cero |
+| F1 | Ayuda: atajos y funciones (pantalla flotante) |
 | Esc / Ctrl+Q | Salir a la terminal |
 
 ## Estructura del código

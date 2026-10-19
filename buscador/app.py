@@ -16,7 +16,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Footer, Input, Label, ListItem, ListView
+from textual.widgets import DataTable, Footer, Input, Label, ListItem, ListView, Static
 
 from .escaner import Registro, borrar_cache, cargar_cache, iniciar_escaneo, raices_por_defecto
 
@@ -155,6 +155,55 @@ def abrir_archivo(ruta):
         pass
 
 
+class AyudaScreen(ModalScreen):
+    """Pantalla flotante de ayuda (F1): atajos y funciones. Esc devuelve a la app."""
+
+    CSS = """
+    AyudaScreen { align: center middle; }
+    #ayuda { width: 80; max-width: 95%; height: auto; max-height: 88%;
+             border: round $panel; background: $surface; padding: 1 2; }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cerrar", "Volver a la app", show=True, priority=True),
+        Binding("f1", "cerrar", show=False, priority=True),
+    ]
+
+    TEXTO = """\
+[b]Buscador de archivos de Office y PDF[/b]
+Busca por nombre y muestra tipo, fechas, peso y carpeta. Orden A→Z.
+
+[yellow b]ATAJOS[/]
+  (escribir)          Filtra los resultados al instante mientras tecleas
+  \\* / ?              Comodines: informe\\*.docx, \\*.pdf, plan?2026
+  /                   Panel de carpetas habituales (elige dónde buscar)
+  ↑ / ↓               Moverse por los resultados
+  Enter / doble clic  Abrir el archivo con su aplicación
+  F5                  Reescanear el ámbito actual y actualizar caché
+  Ctrl+D              Borrar caché y re-escanear de cero
+  Esc (en panel)      Cerrar el panel abierto sin elegir
+  Esc / Ctrl+Q        Salir a la terminal
+  F1                  Esta ayuda
+
+[yellow b]FUNCIONES[/]
+  • Busca Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), PDF
+    y LibreOffice (.odt/.ods/.odp) [i]por nombre del archivo[/i].
+  • Escaneo en paralelo del disco con resultados en vivo; la búsqueda
+    funciona mientras escanea.
+  • Caché por ámbito (disco completo y cada carpeta elegida con el panel
+    '/'): al salir y volver a entrar retoma al instante.
+  • Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el
+    texto se interpreta como patrón (como el 'dir' de CMD).
+  • Cada resultado abre el archivo real; nada se descarga ni modifica.
+"""
+
+    def compose(self):
+        yield Static(self.TEXTO, id="ayuda", expand=True)
+
+    def action_cerrar(self):
+        self.dismiss()
+
+
 class BuscadorApp(App):
     """App principal: buscar archivos por nombre en todo el disco."""
 
@@ -165,6 +214,7 @@ class BuscadorApp(App):
     """
 
     BINDINGS = [
+        Binding("f1", "ayuda", "Ayuda", show=True, priority=True),
         Binding("f5", "reescanear", "Reescanear el disco", show=True, priority=True),
         Binding("ctrl+d", "borrar_cache", "Borrar caché", show=True, priority=True),
         Binding("escape", "quit", "Salir a la terminal", show=True),
@@ -234,6 +284,12 @@ class BuscadorApp(App):
         entrada = self.query_one("#entrada", Input)
         entrada.value = ""
         self._aplicar_raices(raices)
+
+    def action_ayuda(self):
+        """F1: muestra la ayuda (si no está ya abierta)."""
+        if isinstance(self.screen, AyudaScreen):
+            return
+        self.push_screen(AyudaScreen())
 
     def action_borrar_cache(self):
         """Ctrl+D: borra TODAS las cachés y escanea de cero."""
