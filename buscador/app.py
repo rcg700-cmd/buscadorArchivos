@@ -26,6 +26,9 @@ MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
 # Total ~130 columnas; en terminales angostos la tabla permite desplazamiento horizontal.
 ANCHOS = {"Nombre": 30, "Tipo": 13, "Creado": 18, "Modificado": 18, "Peso": 11, "Carpeta": 40}
 SEP = " │ "  # separador visual entre columnas
+# Ciclo de columnas con que se ordena (tecla F8) y su etiqueta en la barra de estado
+COLUMNAS_ORDEN = ("nombre", "modificado", "tamano", "creado")
+ETIQUETA_ORDEN = {"nombre": "Nombre", "modificado": "Modificado", "tamano": "Peso", "creado": "Creado"}
 
 
 def _truncar(texto, n):
@@ -63,6 +66,24 @@ def fmt_num(n):
 def _clave_orden(r):
     """Orden alfabético por nombre (insensible a mayúsculas) + ruta de desempate."""
     return (r.nombre_min, r.ruta)
+
+
+def _clave_de_orden(r, columna):
+    """Clave de orden por columna; con desempate por nombre y ruta."""
+    if columna == "tamano":
+        return (r.tamano, r.nombre_min, r.ruta)
+    if columna == "modificado":
+        return (r.modificado, r.nombre_min, r.ruta)
+    if columna == "creado":
+        return (r.creado, r.nombre_min, r.ruta)
+    return (r.nombre_min, r.ruta)
+
+
+def _ordenar(lista, orden):
+    """Ordena una lista de registros según orden=(columna, descendente)."""
+    columna, descendente = orden
+    lista.sort(key=lambda r: _clave_de_orden(r, columna), reverse=descendente)
+    return lista
 
 
 def _carpetas_habituales():
@@ -140,8 +161,8 @@ class CarpetaScreen(ModalScreen):
         self.dismiss()
 
 
-def abrir_archivo(ruta):
-    """Abre el archivo con la aplicación predeterminada del sistema."""
+def abrir_con_sistema(ruta):
+    """Abre un archivo o carpeta con la aplicación predeterminada del sistema."""
     try:
         if os.name == "nt":
             os.startfile(ruta)  # noqa: S606 — función específica de Windows
@@ -179,6 +200,11 @@ Busca por nombre y muestra tipo, fechas, peso y carpeta. Orden A→Z.
   /                   Panel de carpetas habituales (elige dónde buscar)
   ↑ / ↓               Moverse por los resultados
   Enter / doble clic  Abrir el archivo con su aplicación
+  Ctrl+O              Abrir la carpeta contenedora del archivo resaltado
+  Ctrl+C              Copiar la ruta completa al portapapeles
+  F2 / F3 / F4        Filtrar: solo Word / Excel / PowerPoint
+  F6 / F7             Filtrar: solo PDF / LibreOffice (se apilan)
+  F8 / F9             Orden por columna / ascendente-descendente
   F5                  Reescanear el ámbito actual y actualizar caché
   Ctrl+D              Borrar caché y re-escanear de cero
   Esc (en panel)      Cerrar el panel abierto sin elegir
@@ -194,6 +220,9 @@ Busca por nombre y muestra tipo, fechas, peso y carpeta. Orden A→Z.
     '/'): al salir y volver a entrar retoma al instante.
   • Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el
     texto se interpreta como patrón (como el 'dir' de CMD).
+  • Los filtros de tipo (F2..F7) se combinan con lo que escribas.
+  • Carpetas a ignorar: edita excluir.txt (junto a las cachés, carpeta
+    buscador-archivo en tu perfil de usuario); admite \\* y ?.
   • Cada resultado abre el archivo real; nada se descarga ni modifica.
 """
 
@@ -219,6 +248,15 @@ class BuscadorApp(App):
         Binding("f5", "reescanear", "Reescanear el disco", show=True, priority=True),
         Binding("ctrl+d", "borrar_cache", "Borrar caché", show=True, priority=True),
         Binding("escape", "quit", "Salir a la terminal", show=True),
+        Binding("ctrl+o", "abrir_carpeta", "Abrir carpeta del archivo", show=False, priority=True),
+        Binding("ctrl+c", "copiar_ruta", "Copiar ruta", show=False, priority=True),
+        Binding("f2", "filtro_word", "Solo Word", show=False),
+        Binding("f3", "filtro_excel", "Solo Excel", show=False),
+        Binding("f4", "filtro_power", "Solo PowerPoint", show=False),
+        Binding("f6", "filtro_pdf", "Solo PDF", show=False),
+        Binding("f7", "filtro_libre", "Solo LibreOffice", show=False),
+        Binding("f8", "orden_columna", "Cambiar orden", show=False),
+        Binding("f9", "orden_direccion", "Asc/Desc", show=False),
     ]
 
     def __init__(self, raices=None):
@@ -229,6 +267,8 @@ class BuscadorApp(App):
         self.mostradas = []  # los que pasan el filtro actual (máx. MAX_MOSTRADOS)
         self.rutas_conocidas = set()  # para no duplicar al fusionar escaneo+caché
         self.texto = ""  # filtro actual
+        self.filtros = set()  # tipos activos (F2/F3/F4/F6/F7); vacío = todos
+        self.orden = ("nombre", False)  # (columna, descendente); F8/F9
         self.escaneando = False
         self.de_cache = False  # True mientras la vista provenga (solo) de la caché
         self.panel_abierto = False  # el panel '/' está mostrándose
@@ -266,7 +306,7 @@ class BuscadorApp(App):
         self.de_cache = False
         cache = cargar_cache(self.raices)
         if cache:
-            cache.sort(key=_clave_orden)  # resultados siempre por nombre A→Z
+            _ordenar(cache, self.orden)  # respeta el orden actual (F8/F9)
             self.registros = cache
             self.rutas_conocidas = {r.ruta for r in cache}
             self.de_cache = True
@@ -293,6 +333,96 @@ class BuscadorApp(App):
         if isinstance(self.screen, AyudaScreen):
             return
         self.push_screen(AyudaScreen())
+
+    def _seleccionada(self):
+        """Registro resaltado en la tabla, o None."""
+        tabla = self.query_one("#resultados", DataTable)
+        i = tabla.cursor_row
+        if 0 <= i < len(self.mostradas):
+            return self.mostradas[i]
+        return None
+
+    def action_abrir_carpeta(self):
+        """Ctrl+O: abre la carpeta contenedora del archivo resaltado."""
+        r = self._seleccionada()
+        if r is None:
+            self.notify("Sin archivo resaltado", severity="warning")
+            return
+        carpeta = os.path.dirname(r.ruta)
+        abrir_con_sistema(carpeta)
+        self.notify(f"Carpeta: {carpeta}")
+
+    def _copiar(self, texto):
+        """Copia al portapapeles (Textual y, si falla, clip.exe/xclip/xsel)."""
+        try:
+            self.copy_to_clipboard(texto)
+            return True
+        except Exception:
+            pass
+        try:
+            if os.name == "nt":
+                subprocess.run("clip", input=texto.encode("mbcs"), check=False)  # noqa: S603
+                return True
+            r1 = subprocess.run(  # noqa: S603
+                ["xclip", "-selection", "clipboard"], input=texto.encode(), check=False
+            )
+            if r1.returncode == 0:
+                return True
+            r2 = subprocess.run(  # noqa: S603
+                ["xsel", "-bi"], input=texto.encode(), check=False
+            )
+            return r2.returncode == 0
+        except Exception:
+            return False
+
+    def action_copiar_ruta(self):
+        """Ctrl+C: copia la ruta completa del archivo resaltado."""
+        r = self._seleccionada()
+        if r is None:
+            self.notify("Sin archivo resaltado", severity="warning")
+            return
+        ok = self._copiar(r.ruta)
+        self.notify("Ruta copiada" if ok else "No se pudo copiar la ruta")
+
+    def _toggle_filtro(self, tipo):
+        """F2/F3/F4/F6/F7: activa o desactiva el filtro de un tipo."""
+        if tipo in self.filtros:
+            self.filtros.discard(tipo)
+        else:
+            self.filtros.add(tipo)
+        self.notify("Filtros: " + ("+".join(sorted(self.filtros)) if self.filtros else "ninguno"))
+        self._firma = None
+        self._refrescar()
+
+    def action_filtro_word(self):
+        self._toggle_filtro("Word")
+
+    def action_filtro_excel(self):
+        self._toggle_filtro("Excel")
+
+    def action_filtro_power(self):
+        self._toggle_filtro("PowerPoint")
+
+    def action_filtro_pdf(self):
+        self._toggle_filtro("PDF")
+
+    def action_filtro_libre(self):
+        self._toggle_filtro("LibreOffice")
+
+    def action_orden_columna(self):
+        """F8: cicla la columna de orden (Nombre → Modificado → Peso → Creado)."""
+        i = COLUMNAS_ORDEN.index(self.orden[0])
+        self.orden = (COLUMNAS_ORDEN[(i + 1) % len(COLUMNAS_ORDEN)], self.orden[1])
+        self.notify(f"Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}")
+        self._firma = None
+        self._refrescar()
+
+    def action_orden_direccion(self):
+        """F9: alterna ascendente/descendente."""
+        self.orden = (self.orden[0], not self.orden[1])
+        self.notify(f"Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}")
+        self._firma = None
+        self._refrescar()
 
     def action_borrar_cache(self):
         """Ctrl+D: borra TODAS las cachés y escanea de cero."""
@@ -348,7 +478,7 @@ class BuscadorApp(App):
                 break
             if isinstance(elemento, tuple) and elemento[0] == "fin":
                 lista = elemento[1]
-                lista.sort(key=_clave_orden)  # resultados siempre por nombre A→Z
+                _ordenar(lista, self.orden)  # respeta el orden actual (F8/F9)
                 self.registros = lista
                 self.rutas_conocidas = {r.ruta for r in self.registros}
                 self.escaneando = False
@@ -365,24 +495,35 @@ class BuscadorApp(App):
             self._refrescar()
 
     def _encontradas(self):
-        """Filtra por nombre según el texto actual.
+        """Filtra por nombre y tipo según el estado actual.
 
-        Sin comodines ('*' o '?'): subcadena simple (case del texto).
-        Con comodines: patrón tipo cmd (fnmatch) sobre el nombre completo,
-        p. ej. 'informe*', '*.pdf', 'plan?2026'.
+        - Texto sin comodines ('*' o '?'): subcadena simple sobre el nombre.
+        - Con comodines: patrón tipo cmd (fnmatch) sobre el nombre completo,
+          p. ej. 'informe*', '*.pdf', 'plan?2026'.
+        - self.filtros: si tiene tipos, solo se conservan esos.
+        - self.orden: ('nombre', False) conserva el orden por nombre (el que
+          ya trae la lista tras el escaneo/caché); otros criterios ordenan
+          el resultado filtrado al vuelo.
         """
-        if not self.texto:
-            return self.registros
-        t = self.texto.casefold()
-        if "*" in t or "?" in t:
-            regex = re.compile(fnmatch.translate(t))
-            return [r for r in self.registros if regex.match(r.nombre_min)]
-        return [r for r in self.registros if t in r.nombre_min]
+        filtradas = self.registros
+        if self.texto:
+            t = self.texto.casefold()
+            if "*" in t or "?" in t:
+                regex = re.compile(fnmatch.translate(t))
+                filtradas = [r for r in filtradas if regex.match(r.nombre_min)]
+            else:
+                filtradas = [r for r in filtradas if t in r.nombre_min]
+        if self.filtros:
+            filtradas = [r for r in filtradas if r.tipo in self.filtros]
+        columna, descendente = self.orden
+        if columna == "nombre" and not descendente:
+            return filtradas  # ya viene ordenada por nombre
+        return sorted(filtradas, key=lambda r: _clave_de_orden(r, columna), reverse=descendente)
 
     def _refrescar(self):
         """Reconstruye la tabla si el filtro o el escaneo cambiaron."""
         encontradas = self._encontradas()
-        firma = (self.texto, len(encontradas), self.escaneando, self.de_cache)
+        firma = (self.texto, len(encontradas), self.escaneando, self.de_cache, tuple(sorted(self.filtros)), self.orden)
         if firma == self._firma:
             return
         self._firma = firma
@@ -410,6 +551,9 @@ class BuscadorApp(App):
         estado = f"Encontrados: {fmt_num(len(self.registros))} archivos de Office/PDF"
         if self.texto:
             estado += f" · Visibles: {fmt_num(len(encontradas))}"
+        if self.filtros:
+            estado += " · Filtros: " + "+".join(sorted(self.filtros))
+        estado += f" · Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}"
         if ocultas > 0:
             estado += f" — las primeras {fmt_num(len(self.mostradas))} (sigue escribiendo)"
         if self.escaneando:
@@ -430,7 +574,11 @@ class BuscadorApp(App):
         return ""
 
     def _actualizar_ruta(self):
-        self.query_one("#ruta", Label).update(f"Ruta: {self._ruta_resaltada()}")
+        """Actualiza la barra de ruta; tolerante a widgets recién desmontados."""
+        try:
+            self.query_one("#ruta", Label).update(f"Ruta: {self._ruta_resaltada()}")
+        except Exception:
+            pass
 
     @on(DataTable.RowHighlighted)
     def _fila_resaltada(self, event: DataTable.RowHighlighted):
@@ -444,7 +592,7 @@ class BuscadorApp(App):
         except (TypeError, ValueError):
             return
         if 0 <= i < len(self.mostradas):
-            abrir_archivo(self.mostradas[i].ruta)
+            abrir_con_sistema(self.mostradas[i].ruta)
             self.notify(f"Abriendo: {self.mostradas[i].ruta}")
 
 

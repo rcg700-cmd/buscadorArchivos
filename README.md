@@ -8,10 +8,11 @@ Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras e
 
 - 🔍 Búsqueda por nombre completo o parcial, filtrando al instante mientras tecleas. Además acepta **comodines** estilo terminal: `informe*2026`, `*.pdf`, `plan?2026`.
 - 📂 **Panel `/`:** escribe `/` en la búsqueda y se despliega la lista de carpetas habituales (Documentos, Descargas, Escritorio, OneDrive…). Elige una y se escanea **solo esa carpeta** (con su propia caché, así alternar no fuerza re-escanear el disco). Sin `/`, busca en todo el disco.
+- 🚫 **Exclusiones:** archivo `excluir.txt` con carpetas a ignorar durante el escaneo (`node_modules`, respaldo de aplicaciones, etc.).
 - 🧹 **Ctrl+D** borra las cachés y re-escanea de cero (también disponible: `buscador --borrar-cache`).
 - 📄 Busca Word (`.doc/.docx/.docm`), Excel (`.xls/.xlsx/.xlsm`), PowerPoint (`.ppt/.pptx/.pptm`), PDF y **LibreOffice** (`.odt/.ods/.odp`).
 - 📊 Cada resultado muestra: **nombre, tipo, fecha de creación, fecha de modificación y peso**.
-- 🎯 Lista ordenada por nombre (A→Z), navegable con **flechas y ratón**; `Enter` o doble clic abre el archivo con su aplicación predeterminada.
+- 🎯 Orden **por nombre (A→Z) por defecto** y configurable con `F8`/`F9` (peso, fechas…); lista navegable con **flechas y ratón**; `Enter` o doble clic abre el archivo con su aplicación predeterminada.
 - 💾 **Caché del escaneo**: el disco completo se escanea una vez y las siguientes ejecuciones arrancan al instante (`F5` para re-escanear).
 
 ## Requisitos
@@ -70,9 +71,9 @@ buscador
 ## Cómo funciona
 
 - Sin argumentos busca en todo el disco (todos los rígidos en Windows, `/` en Linux); con rutas, solo en esas carpetas.
-- El primer escaneo de todo el disco puede tardar unos minutos; el resultado se guarda en caché en tu perfil de usuario:
-  - Windows: `%LOCALAPPDATA%\buscador-archivo\cache.json`
-  - Ubuntu: `~/.cache/buscador-archivo/cache.json`
+- El primer escaneo de todo el disco puede tardar unos minutos; el resultado se guarda en caché en tu perfil de usuario (un archivo por ámbito: disco completo o cada carpeta elegida con `/`):
+  - Windows: `%LOCALAPPDATA%\buscador-archivo\cache_<hash>.json`
+  - Ubuntu: `~/.cache/buscador-archivo/cache_<hash>.json`
 - Los cambios del disco (archivos creados o borrados después del último escaneo) se reflejan con `F5`.
 
 ## Atajos
@@ -84,10 +85,29 @@ buscador
 | `/` | Desplegar panel de carpetas habituales (elegir dónde buscar) |
 | ↑ / ↓ | Moverse entre resultados |
 | Enter / doble clic | Abrir archivo seleccionado |
+| Ctrl+O | Abrir la carpeta contenedora del archivo resaltado |
+| Ctrl+C | Copiar la ruta completa al portapapeles |
+| F2 / F3 / F4 | Filtrar: solo Word / Excel / PowerPoint |
+| F6 / F7 | Filtrar: solo PDF / LibreOffice (se apilan con lo escrito) |
+| F8 / F9 | Cambiar la columna de orden / alternar ascendente‑descendente |
 | F5 | Re-escanear el disco y actualizar la caché |
 | Ctrl+D | Borrar caché y re-escanear de cero |
 | F1 | Ayuda: atajos y funciones (pantalla flotante) |
 | Esc / Ctrl+Q | Salir a la terminal |
+
+## Exclusiones
+
+Puedes indicar carpetas que el escaneo debe ignorar creando (o editando) el
+archivo `excluir.txt` junto a la caché (`%LOCALAPPDATA%\buscador-archivo\excluir.txt`
+en Windows; `~/.cache/buscador-archivo/excluir.txt` en Ubuntu). Cada línea no
+comentada es un fragmento de la ruta de carpeta a ignorar (insensible a
+mayúsculas) y admite comodines `*` y `?`. Se aplica en el siguiente escaneo:
+
+```
+# ejemplo
+node_modules
+C:\Users\*\AppData\Local\Packages
+```
 
 ## Estructura del código
 

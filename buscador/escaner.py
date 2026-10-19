@@ -5,6 +5,7 @@ iterativa (con una pila, para no agotar la recursión), comprueba extensiones y
 lee nombre, tipo, fechas y tamaño. No abre ni parsea los documentos.
 """
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -84,6 +85,7 @@ def escanear(raices, salida, guardar=True):
     parado = threading.Event()
     cola_dirs = queue.Queue()
     cola_salida = queue.Queue()  # registros frescos: trabajadores → coordinator
+    patrones_excluir = _cargar_exclusiones()  # de excluir.txt (una lectura por escaneo)
     for raiz in raices:
         cola_dirs.put(raiz)
 
@@ -106,9 +108,12 @@ def escanear(raices, salida, guardar=True):
                                     continue
                                 if entrada.name.lower() in CARPETAS_IGNORADAS:
                                     continue
+                                nueva = entrada.path
+                                if _carpeta_excluida(nueva, patrones_excluir):
+                                    continue
                                 with lock:
                                     pendientes[0] += 1
-                                cola_dirs.put(entrada.path)
+                                cola_dirs.put(nueva)
                             else:
                                 ext = os.path.splitext(entrada.name)[1].lower()
                                 if ext not in EXTENSIONES:
@@ -173,6 +178,60 @@ def borrar_cache():
         except OSError:
             pass
     return borrado
+
+
+PLANTILLA_EXCLUIR = """\
+# excluir.txt — carpetas que el buscador ignora durante el escaneo.
+# Cada línea no comentada es un fragmento de la ruta de una carpeta a
+# ignorar (insensible a mayúsculas); admite comodines * y ?.
+# Ejemplos:
+#   node_modules
+#   C:\\Users\\*\\AppData\\Local\\Packages
+"""
+
+
+def _cargar_exclusiones():
+    """Lee (o crea con su plantilla) excluir.txt junto a las cachés.
+
+    Devuelve una tupla de ('sub', texto) o ('glob', patron) en minúsculas.
+    """
+    ruta = _carpeta_cache() / "excluir.txt"
+    try:
+        if not ruta.exists():
+            ruta.parent.mkdir(parents=True, exist_ok=True)
+            ruta.write_text(PLANTILLA_EXCLUIR, encoding="utf-8")
+        lineas = ruta.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return ()
+    patrones = []
+    for linea in lineas:
+        linea = linea.strip()
+        if not linea or linea.startswith("#"):
+            continue
+        clave = linea.casefold()
+        if "*" in clave or "?" in clave:
+            patrones.append(("glob", clave))
+        else:
+            patrones.append(("sub", clave))
+    return tuple(patrones)
+
+
+def _carpeta_excluida(ruta, patrones):
+    """True si la carpeta casa con alguna exclusión (subcadena o patrón).
+
+    Se prueba la ruta tal cual y también con barra final, para que un
+    patrón como ``*\\Docs\\`` excluya tanto a la carpeta Docs como a
+    todo lo que cuelga de ella.
+    """
+    r = ruta.casefold()
+    r2 = r + os.sep
+    for tipo, patron in patrones:
+        if tipo == "sub":
+            if patron in r or patron in r2:
+                return True
+        elif fnmatch.fnmatch(r, patron) or fnmatch.fnmatch(r2, patron):
+            return True
+    return False
 
 
 def iniciar_escaneo(raices, guardar=True):
