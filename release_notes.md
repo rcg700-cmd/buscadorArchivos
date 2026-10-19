@@ -1,19 +1,21 @@
-# v1.1.0 — abrir carpeta, filtros, orden y exclusiones
+# v1.1.2 — retoque visual completo
 
-
-Sobre la base v1.0.0 (búsqueda por nombre mientras escribes, escaneo en paralelo, caché por ámbito) se añaden:
+Sobre la base v1.1.0 (búsqueda por nombre, filtros, orden, exclusiones, caché por ámbito) se añade una pasada estética:
 
 ## Novedades
 
-- ✅ **Ctrl+O** abre la carpeta contenedora del archivo resaltado; **Ctrl+C** copia la ruta completa al portapapeles.
-- ✅ **Filtros por tipo (apilables):** F2 Word · F3 Excel · F4 PowerPoint · F6 PDF · F7 LibreOffice. Se combinan con lo que escribas; la barra de estado muestra los activos.
-- ✅ **Orden configurable:** F8 cicla la columna (Nombre → Modificado → Peso → Creado) y F9 alterna ascendente/descendente (la barra de estado muestra `Orden: Peso ↓`, por ejemplo).
-- ✅ **Exclusiones:** archivo `excluir.txt` (junto a la caché) para que el escaneo ignore carpetas; admite subcadenas y comodines `*`/`?` (`node_modules`, `C:\Users\*\AppData\Local\Packages`). Se crea automáticamente con ejemplos comentados.
-- ✅ Panel `/` de carpetas habituales, comodines en la búsqueda, F1 ayuda y barra de ruta inferior (de la v1.0.x, ahora documentadas en la ayuda F1).
+- 🎨 **Iconos y colores por tipo en la tabla:** 📝 Word azul, 📊 Excel verde, 📽️ PowerPoint naranja, 📕 PDF rojo, 🐧 LibreOffice teal. Fechas, peso y carpeta en gris tenue; el peso alineado a la derecha.
+- 🔺 **Flecha de orden en el encabezado** de la columna activa (▲ ascendente, ▼ descendente), además del indicador en la barra de estado.
+- 🪟 **Borde de la tabla con título** `Resultados: N` (el total visible siempre a la vista).
+- 🌈 **Barra de estado a todo color:** ⏳ escaneando en amarillo —ahora informa cuántas **carpetas quedan en cola**—, 💾 caché en cian, filtros en verde, orden en magenta.
+- 🌗 **Ctrl+T:** recorre los temas de colores de Textual (claros y oscuros, tokio-night, dracula…) y **recuerda tu elección entre sesiones** (preferencias.json junto a las cachés).
+- ❓ **Ayuda F1 rediseñada:** tabla de atajos a dos columnas y secciones coloreadas, ahora incluye Ctrl+T.
+
+Sin cambios en cómo escanea ni busca: solo la cara.
 
 ## Descargas
 
-- **Windows (sin instalar nada):** `buscador-windows-1.1.0.zip` → contiene `buscador.exe` (doble clic y listo).
+- **Windows (sin instalar nada):** `buscador-windows-1.1.2.zip` → contiene `buscador.exe` (doble clic y listo).
 - **Código fuente:** clona este repo y sigue el README (`instalar.cmd` / `instalar.sh`).
 
 ## Formatos buscados
