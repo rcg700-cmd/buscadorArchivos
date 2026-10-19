@@ -24,6 +24,9 @@ Buscador de archivos de suites ofimáticas para escritorio:
 ## Stack y comandos (implementado)
 
 - **Stack:** Python 3.14 + [Textual](https://textual.textualize.io) (TUI única dependencia, en `requirements.txt`).
+- **Release v1.0.0 publicada:** <https://github.com/rcg700-cmd/buscadorArchivos/releases/tag/v1.0.0> con `buscador-windows-1.0.0.zip` (exe standalone).
+- **Recompilar el exe (Windows):** `python -m PyInstaller --onefile --console --name buscador --clean --noconfirm --paths . buscador_exe.py --exclude-module PIL --exclude-module tkinter --exclude-module jedi --exclude-module IPython --exclude-module matplotlib --exclude-module numpy --exclude-module pandas --exclude-module pytest --exclude-module setuptools` → `dist\buscador.exe` (~18.7 MB; sin excludes crece a ~107 MB porque arrastra Pillow/tkinter/jedi de colados). Empaquetar zip con `dist\buscador.exe` + `LEAME.txt` y adjuntar a la release. El build dentro de OneDrive tarda ~4 min (no lo cortes, es normal).
+- **Nunca usar `buscador/__main__.py` como entrada de PyInstaller** (imports relativos fallan fuera del paquete); la entrada correcta es `buscador_exe.py`.
 - Instalar dependencias: `python -m pip install -r requirements.txt`
 - **Instalar comando global:** `instalar.cmd` (Windows, crea `%LOCALAPPDATA%\Microsoft\WindowsApps\buscador.bat` en el PATH de usuario; cuidado: dentro de un .bat generador, un `%` literal se escapa `%%`, y `%*` falla si se escribe `%%%*` — quedó documentado en el propio script) o `bash instalar.sh` (Ubuntu, crea `~/.local/bin/buscador`). Alternativa estándar: `python -m pip install -e .` (pyproject con `[project.scripts] buscador = buscador.app:main`, pero puede no quedar en PATH según la instalación de Python).
 - Ejecutar: `buscador` (todo el disco: todos los rígidos en Windows, `/` en Linux) o `buscador "D:\Docs"`; equivalente: `python -m buscador`.
