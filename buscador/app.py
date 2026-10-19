@@ -5,16 +5,20 @@
   el archivo seleccionado con la aplicación predeterminada.
 """
 
+import fnmatch
 import os
 import queue
+import re
 import subprocess
+from pathlib import Path
 
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import DataTable, Footer, Input, Label
+from textual.screen import ModalScreen
+from textual.widgets import DataTable, Footer, Input, Label, ListItem, ListView
 
-from .escaner import Registro, cargar_cache, iniciar_escaneo, raices_por_defecto
+from .escaner import Registro, borrar_cache, cargar_cache, iniciar_escaneo, raices_por_defecto
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
 
@@ -61,6 +65,81 @@ def _clave_orden(r):
     return (r.nombre_min, r.ruta)
 
 
+def _carpetas_habituales():
+    """Carpetas típicas del sistema (solo las que existen), para el panel '/'."""
+    home = Path.home()
+    nombres = ["Desktop", "Escritorio", "Documents", "Documentos", "Downloads",
+               "Descargas", "Pictures", "Imágenes", "Music", "Música",
+               "Videos", "Vídeos", "OneDrive/Documentos", "OneDrive/Documents"]
+    rutas = [home / n.replace("/", os.sep) for n in nombres]
+    if os.name != "nt":
+        rutas = [Path("/")] + rutas
+    encontradas = []
+    vistas = set()
+    for ruta in rutas:
+        try:
+            clave = str(ruta.resolve()).lower()
+        except OSError:
+            continue
+        if ruta.exists() and ruta.is_dir() and clave not in vistas:
+            vistas.add(clave)
+            encontradas.append(ruta)
+    return encontradas
+
+
+class CarpetaScreen(ModalScreen):
+    """Panel para elegir una carpeta raíz: filtrar, elegir y escanear."""
+
+    CSS = """
+    CarpetaScreen { align: center middle; }
+    #caja { width: 90; max-width: 95%; height: auto; max-height: 24;
+            border: round $panel; background: $surface; padding: 1 2; }
+    #filtrar { margin-bottom: 1; }
+    #lista { height: auto; max-height: 15; }
+    """
+
+    BINDINGS = [Binding("escape", "cancelar", "Cerrar", priority=True)]
+
+    def __init__(self, al_elegir):
+        super().__init__()
+        self._al_elegir = al_elegir
+        # Primer elemento: volver a buscar en todo el disco
+        self.candidatas = [(None, "📁 Todo el disco (todas las unidades / la raíz /)")]
+        self.candidatas += [(p, f"📁 {p}") for p in _carpetas_habituales()]
+
+    def compose(self):
+        yield Input(placeholder="Escribe para filtrar carpetas…", id="filtrar")
+        yield ListView(id="lista")
+
+    def on_mount(self):
+        self._llenar()
+
+    def _llenar(self):
+        lista = self.query_one("#lista", ListView)
+        lista.clear()
+        texto = self.query_one("#filtrar", Input).value.casefold()
+        elegidas = self.candidatas
+        if texto:
+            elegidas = [(d, t) for d, t in self.candidatas if texto in t.casefold()]
+        for destino, etiqueta in elegidas:
+            item = ListItem(Label(etiqueta))
+            item.data = destino
+            lista.append(item)
+
+    @on(Input.Changed)
+    def _filtra_carpetas(self, event: Input.Changed):
+        self._llenar()
+
+    @on(ListView.Selected)
+    def _elige(self, event: ListView.Selected):
+        self.dismiss()
+        destino = getattr(event.item, "data", None)
+        self._al_elegir(destino)
+
+    def action_cancelar(self):
+        self.dismiss()
+
+
 def abrir_archivo(ruta):
     """Abre el archivo con la aplicación predeterminada del sistema."""
     try:
@@ -87,7 +166,8 @@ class BuscadorApp(App):
 
     BINDINGS = [
         Binding("f5", "reescanear", "Reescanear el disco", show=True, priority=True),
-        Binding("escape", "quit", "Salir a la terminal", show=True, priority=True),
+        Binding("ctrl+d", "borrar_cache", "Borrar caché", show=True, priority=True),
+        Binding("escape", "quit", "Salir a la terminal", show=True),
     ]
 
     def __init__(self, raices=None):
@@ -100,10 +180,11 @@ class BuscadorApp(App):
         self.texto = ""  # filtro actual
         self.escaneando = False
         self.de_cache = False  # True mientras la vista provenga (solo) de la caché
+        self.panel_abierto = False  # el panel '/' está mostrándose
         self._firma = None  # (texto, total, escaneando, de_cache) para saber si cambió la vista
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="Escribe el nombre (o parte) del archivo…", id="entrada")
+        yield Input(placeholder="Escribe el nombre… (/ carpetas · * ? patrones)", id="entrada")
         yield Label("", id="estado")
         tabla = DataTable(id="resultados", cursor_type="row", zebra_stripes=True)
         # Encabezados construidos igual que las celdas: el separador '│'
@@ -122,16 +203,43 @@ class BuscadorApp(App):
     def on_mount(self):
         # Revisa la cola 4 veces/segundo (activa solo cuando haya escaneo)
         self.set_interval(0.25, self._recibir)
-        # Si hay caché válida para estas raíces, se muestra al instante
+        self._aplicar_raices(self.raices)
+
+    def _aplicar_raices(self, raices):
+        """Cambia el ámbito de búsqueda usando su caché si ya existe."""
+        self.raices = tuple(raices)
+        self.registros = []
+        self.rutas_conocidas = set()
+        self.de_cache = False
         cache = cargar_cache(self.raices)
         if cache:
             cache.sort(key=_clave_orden)  # resultados siempre por nombre A→Z
             self.registros = cache
             self.rutas_conocidas = {r.ruta for r in cache}
             self.de_cache = True
+            self.escaneando = False
+            self._firma = None
             self._refrescar()
         else:
             self._comenzar_escaneo()
+
+    def _elegir_raiz(self, destino):
+        """Callback del panel '/': carpeta elegida (None = todo el disco)."""
+        if destino is None:
+            raices = raices_por_defecto()
+            self.notify("Buscando en todo el disco")
+        else:
+            raices = (str(destino),)
+            self.notify(f"Buscando en: {destino}")
+        entrada = self.query_one("#entrada", Input)
+        entrada.value = ""
+        self._aplicar_raices(raices)
+
+    def action_borrar_cache(self):
+        """Ctrl+D: borra TODAS las cachés y escanea de cero."""
+        habia = borrar_cache()
+        self.notify("Caché borrada" if habia else "No había caché guardada")
+        self._aplicar_raices(self.raices)
 
     def _comenzar_escaneo(self):
         """Inicia un escaneo en segundo plano sin borrar lo ya visible."""
@@ -152,8 +260,19 @@ class BuscadorApp(App):
 
     @on(Input.Changed)
     def _cambio_texto(self, event: Input.Changed):
+        # Solo escucha el campo principal, no el Input del panel de carpetas
+        if getattr(event.input, "id", None) != "entrada":
+            return
         self.texto = event.value
+        # Trigger del panel de carpetas: escribir '/' solo
+        if event.value == "/" and not self.panel_abierto:
+            self.panel_abierto = True
+            self.push_screen(CarpetaScreen(self._elegir_raiz), self._cierra_panel)
+            return
         self._refrescar()
+
+    def _cierra_panel(self, _resultado=None):
+        self.panel_abierto = False
 
     def _recibir(self):
         """Mueve los registros nuevos del hilo de escaneo a la lista principal.
@@ -187,10 +306,18 @@ class BuscadorApp(App):
             self._refrescar()
 
     def _encontradas(self):
-        """Aplica el filtro por nombre (subcadena, sin distinguir mayúsculas)."""
+        """Filtra por nombre según el texto actual.
+
+        Sin comodines ('*' o '?'): subcadena simple (case del texto).
+        Con comodines: patrón tipo cmd (fnmatch) sobre el nombre completo,
+        p. ej. 'informe*', '*.pdf', 'plan?2026'.
+        """
         if not self.texto:
             return self.registros
         t = self.texto.casefold()
+        if "*" in t or "?" in t:
+            regex = re.compile(fnmatch.translate(t))
+            return [r for r in self.registros if regex.match(r.nombre_min)]
         return [r for r in self.registros if t in r.nombre_min]
 
     def _refrescar(self):
@@ -227,9 +354,11 @@ class BuscadorApp(App):
         if ocultas > 0:
             estado += f" — las primeras {fmt_num(len(self.mostradas))} (sigue escribiendo)"
         if self.escaneando:
-            estado = "⏳ Escaneando el disco… " + estado
+            estado = "⏳ Escaneando… " + estado
         elif self.de_cache:
-            estado = "💾 Datos de caché (F5 para reescanear). " + estado
+            estado = "💾 Datos de caché (F5 re-escanear). " + estado
+        ambito = "todo el disco" if self.raices == tuple(raices_por_defecto()) else ", ".join(self.raices)
+        estado += f" · Ámbito: {ambito}"
         self.query_one("#estado", Label).update(estado)
 
     @on(DataTable.RowSelected)
@@ -246,3 +375,21 @@ class BuscadorApp(App):
 
 def main(raices=None):
     BuscadorApp(list(raices) if raices else None).run()
+
+
+def cli(argv=None):
+    """Entrada de comandos compartida por `python -m buscador` y el exe.
+
+    Opciones:
+      --borrar-cache   borra todas las cachés antes de arrancar el escaneo.
+    Resto de argumentos: rutas concretas para escanear.
+    """
+    import sys
+
+    from .escaner import borrar_cache
+
+    args = list(argv) if argv is not None else list(sys.argv[1:])
+    if "--borrar-cache" in args:
+        args.remove("--borrar-cache")
+        print("Caché borrada." if borrar_cache() else "No había caché guardada.")
+    main(args if args else None)

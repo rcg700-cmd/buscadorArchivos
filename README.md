@@ -6,7 +6,9 @@ Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras e
 
 ## Características
 
-- 🔍 Búsqueda por nombre completo o parcial, filtrando al instante mientras tecleas.
+- 🔍 Búsqueda por nombre completo o parcial, filtrando al instante mientras tecleas. Además acepta **comodines** estilo terminal: `informe*2026`, `*.pdf`, `plan?2026`.
+- 📂 **Panel `/`:** escribe `/` en la búsqueda y se despliega la lista de carpetas habituales (Documentos, Descargas, Escritorio, OneDrive…). Elige una y se escanea **solo esa carpeta** (con su propia caché, así alternar no fuerza re-escanear el disco). Sin `/`, busca en todo el disco.
+- 🧹 **Ctrl+D** borra las cachés y re-escanea de cero (también disponible: `buscador --borrar-cache`).
 - 📄 Busca Word (`.doc/.docx/.docm`), Excel (`.xls/.xlsx/.xlsm`), PowerPoint (`.ppt/.pptx/.pptm`), PDF y **LibreOffice** (`.odt/.ods/.odp`).
 - 📊 Cada resultado muestra: **nombre, tipo, fecha de creación, fecha de modificación y peso**.
 - 🎯 Lista ordenada por nombre (A→Z), navegable con **flechas y ratón**; `Enter` o doble clic abre el archivo con su aplicación predeterminada.
@@ -78,10 +80,13 @@ buscador
 | Tecla | Acción |
 |-------|--------|
 | (escribir) | Filtrar resultados al instante |
+| `*` / `?` | Comodines de patrón (`informe*`, `*.pdf`, `plan?2026`) |
+| `/` | Desplegar panel de carpetas habituales (elegir dónde buscar) |
 | ↑ / ↓ | Moverse entre resultados |
 | Enter / doble clic | Abrir archivo seleccionado |
 | F5 | Re-escanear el disco y actualizar la caché |
-| Ctrl+Q | Salir |
+| Ctrl+D | Borrar caché y re-escanear de cero |
+| Esc / Ctrl+Q | Salir a la terminal |
 
 ## Estructura del código
 

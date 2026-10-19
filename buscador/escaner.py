@@ -5,6 +5,7 @@ iterativa (con una pila, para no agotar la recursión), comprueba extensiones y
 lee nombre, tipo, fechas y tamaño. No abre ni parsea los documentos.
 """
 
+import hashlib
 import json
 import os
 import queue
@@ -158,6 +159,22 @@ def escanear(raices, salida, guardar=True):
         guardar_cache(tuple(raices), encontrados)
 
 
+def borrar_cache():
+    """Borra TODAS las cachés (cualquier ámbito). Devuelve True si borro algo."""
+    borrado = False
+    try:
+        archivos = list(_carpeta_cache().glob("cache*.json"))
+    except OSError:
+        return False
+    for p in archivos:
+        try:
+            p.unlink()
+            borrado = True
+        except OSError:
+            pass
+    return borrado
+
+
 def iniciar_escaneo(raices, guardar=True):
     """Devuelve (hilo, cola). Llamar a hilo.start() para comenzar."""
     cola = queue.Queue()
@@ -168,18 +185,25 @@ def iniciar_escaneo(raices, guardar=True):
 # --------------------------------------------------------------------- caché
 
 
-def _ruta_cache() -> Path:
-    """Ruta del archivo de caché según el sistema operativo (fuera del repo)."""
+def _carpeta_cache() -> Path:
+    """Carpeta donde viven los archivos de caché (perfil de usuario, fuera del repo)."""
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
     else:
         base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-    return Path(base) / "buscador-archivo" / "cache.json"
+    return Path(base) / "buscador-archivo"
+
+
+def _ruta_cache(raices):
+    """Ruta de la caché para un ámbito concreto (cada raíces tiene su archivo,
+    así alternar entre 'todo el disco' y una carpeta no re-escanea cada vez)."""
+    clave = hashlib.sha1(repr(tuple(raices)).encode("utf-8")).hexdigest()[:8]
+    return _carpeta_cache() / f"cache_{clave}.json"
 
 
 def guardar_cache(raices, registros):
     """Guarda la lista completa de registros (atómica: escribe a .tmp y reemplaza)."""
-    ruta = _ruta_cache()
+    ruta = _ruta_cache(raices)
     try:
         ruta.parent.mkdir(parents=True, exist_ok=True)
         datos = {
@@ -211,9 +235,17 @@ def cargar_cache(raices):
     Solo acepta cachés cuya lista de raíces coincida exactamente con las de
     esta ejecución (un escaneo con otras raíces no sirve).
     """
+    ruta = _ruta_cache(raices)
     try:
-        datos = json.loads(_ruta_cache().read_text(encoding="utf-8"))
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        # Limpieza silenciosa de la caché antigua de un solo archivo (pre v1.0)
+        legada = _carpeta_cache() / "cache.json"
+        if legada.exists():
+            try:
+                legada.unlink()
+            except OSError:
+                pass
         return None
     if datos.get("version") != 1 or datos.get("raices") != list(raices):
         return None

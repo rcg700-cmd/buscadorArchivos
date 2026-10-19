@@ -1,11 +1,8 @@
-"""Punto de entrada: `python -m buscador [carpetas...]`.
-
-Sin argumentos busca en todo el disco; con argumentos solo en esas carpetas.
-"""
+"""Punto de entrada: `python -m buscador [opciones] [carpetas...]`."""
 
 import sys
 
-from .app import main
+from .app import cli
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    cli()

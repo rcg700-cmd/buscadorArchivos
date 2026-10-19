@@ -9,4 +9,4 @@ import sys
 import buscador.app
 
 if __name__ == "__main__":
-    buscador.app.main(sys.argv[1:])
+    buscador.app.cli()
