@@ -11,6 +11,7 @@ import os
 import queue
 import re
 import subprocess
+import threading
 from pathlib import Path
 
 from rich.cells import cell_len
@@ -21,7 +22,7 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Footer, Input, Label, ListItem, ListView, Static
 
-from .escaner import Registro, borrar_cache, cargar_cache, iniciar_escaneo, raices_por_defecto
+from .escaner import Registro, borrar_cache, cargar_cache, guardar_cache, iniciar_escaneo, raices_por_defecto, validar_cache
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
 
@@ -282,7 +283,9 @@ class AyudaScreen(ModalScreen):
         "• Escaneo en paralelo del disco con resultados en vivo; la búsqueda\n"
         "  funciona mientras escanea y verá cuántas carpetas quedan.",
         "• Caché por ámbito (disco completo y cada carpeta elegida con el panel\n"
-        "  '/'): al salir y volver a entrar retoma al instante.",
+        "  '/'): al salir y volver a entrar retoma al instante. Además, al abrir\n"
+        "  la caché se verifica en segundo plano: los archivos borrados del disco\n"
+        "  desaparecen de la lista sin re-escanear (F5 ve los de creación nueva).",
         "• Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el\n"
         "  texto se interpreta como patrón (como el 'dir' de CMD).",
         "• Los filtros de tipo (F2..F7) se combinan con lo que escribas.",
@@ -359,6 +362,7 @@ class BuscadorApp(App):
         self._progreso = None  # (archivos, carpetas en cola) informado por el escáner
         self._visibles_estado = (0, 0)  # (visibles, ocultas) del último refresco
         self._claves_columna = {}  # clave lógica -> ColumnKey del DataTable
+        self._generacion = 0  # invalida resultados de hilos de fondo (validación) tras cambiar de ámbito o re-escanear
         self._firma = None  # (texto, total, escaneando, de_cache) para saber si cambió la vista
 
     def compose(self) -> ComposeResult:
@@ -406,6 +410,7 @@ class BuscadorApp(App):
         self.rutas_conocidas = set()
         self.de_cache = False
         self._progreso = None
+        self._generacion += 1  # invalida cualquier validación en vuelo del ámbito anterior
         cache = cargar_cache(self.raices)
         if cache:
             _ordenar(cache, self.orden)  # respeta el orden actual (F8/F9)
@@ -415,8 +420,22 @@ class BuscadorApp(App):
             self.escaneando = False
             self._firma = None
             self._refrescar()
+            # Validación incremental en segundo plano: descarta los archivos
+            # borrados desde el último escaneo sin re-escanear nada.
+            self._iniciar_validacion(self.registros)
         else:
             self._comenzar_escaneo()
+
+    def _iniciar_validacion(self, lista):
+        """Comprueba la lista de caché en un hilo y publica ("validadas", …)."""
+        gen = self._generacion
+        raices = self.raices
+
+        def validar():
+            vivas, expiradas = validar_cache(lista)
+            self.cola.put(("validadas", gen, raices, vivas, expiradas))
+
+        threading.Thread(target=validar, daemon=True).start()
 
     def _elegir_raiz(self, destino):
         """Callback del panel '/': carpeta elegida (None = todo el disco)."""
@@ -535,6 +554,7 @@ class BuscadorApp(App):
     def _comenzar_escaneo(self):
         """Inicia un escaneo en segundo plano sin borrar lo ya visible."""
         self.escaneando = True
+        self._generacion += 1  # los resultados de validación de la caché quedan obsoletos
         self.hilo, self.cola = iniciar_escaneo(self.raices)
         self.hilo.start()
         self._firma = None
@@ -588,11 +608,15 @@ class BuscadorApp(App):
                     self.escaneando = False
                     self.de_cache = False
                     self._progreso = None
+                    self._generacion += 1  # cualquier validación en vuelo ya no aplica a esta lista fresca
                     fin = True
                     break
                 if elemento[0] == "progreso":
                     self._progreso = (elemento[1], elemento[2])
                     hubo_progreso = True
+                    continue
+                if elemento[0] == "validadas":
+                    self._aplicar_validadas(elemento)
                     continue
             r = elemento
             if r.ruta in self.rutas_conocidas:  # ya visible (vía caché o antes)
@@ -605,6 +629,27 @@ class BuscadorApp(App):
         elif hubo_progreso and self.escaneando:
             # Solo la barra de estado (barato): no toca la tabla
             self._pinta_estado(*self._visibles_estado)
+
+    def _aplicar_validadas(self, elemento):
+        """Aplica el resultado de la validación incremental de la caché.
+
+        Solo si sigue vigente: misma generación, mismo ámbito y la vista aún
+        es de caché (un re-escaneo o cambio de carpeta lo descarta).
+        """
+        _, gen, raices, vivas, expiradas = elemento
+        if gen != self._generacion or raices != self.raices or not self.de_cache:
+            return  # resultado obsoleto: la lista ya se reemplazó por otra cosa
+        # vivas conserva el orden de la caché (ya ordenada al cargarla)
+        self.registros = vivas
+        self.rutas_conocidas = {r.ruta for r in vivas}
+        self._firma = None
+        self._refrescar()
+        if expiradas:
+            guardar_cache(self.raices, vivas)  # reescribe la caché sin los borrados
+            self.notify(
+                f"Caché: {fmt_num(expiradas)} archivo(s) ya no existen y se "
+                "descartaron (F5 para ver los nuevos)"
+            )
 
     def _encontradas(self):
         """Filtra por nombre y tipo según el estado actual.

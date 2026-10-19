@@ -167,6 +167,17 @@ def escanear(raices, salida, guardar=True):
         guardar_cache(tuple(raices), encontrados)
 
 
+def validar_cache(registros):
+    """Validación incremental: descarta entradas cuyo archivo ya no existe.
+
+    Devuelve (lista_viva, n_expiradas) conservando el orden de entrada. Solo
+    comprueba la existencia (una llamada ligera a exists(); no re-escanea ni
+    detecta archivos nuevos — para eso está F5).
+    """
+    vivas = [r for r in registros if os.path.exists(r.ruta)]
+    return vivas, len(registros) - len(vivas)
+
+
 def borrar_cache():
     """Borra TODAS las cachés (cualquier ámbito). Devuelve True si borro algo."""
     borrado = False

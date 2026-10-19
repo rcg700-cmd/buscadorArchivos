@@ -77,6 +77,7 @@ buscador
   - Windows: `%LOCALAPPDATA%\buscador-archivo\cache_<hash>.json`
   - Ubuntu: `~/.cache/buscador-archivo/cache_<hash>.json`
 - Los cambios del disco (archivos creados o borrados después del último escaneo) se reflejan con `F5`.
+- **Al abrir, la caché se verifica en segundo plano:** los archivos ya borrados del disco se descartan de la lista (y se limpian de la caché) sin re-escanear; para detectar los **nuevos** sigue siendo necesario `F5`.
 - El tema elegido con `Ctrl+T` se guarda en `preferencias.json` junto a las cachés.
 
 ## Atajos
