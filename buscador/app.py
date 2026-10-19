@@ -211,6 +211,7 @@ class BuscadorApp(App):
     #entrada { width: 1fr; margin: 1 3 0 3; }
     #estado { width: 100%; padding: 0 4; margin-top: 1; color: $text-muted; }
     #resultados { height: 1fr; width: 1fr; margin: 1 3 0 3; border: round $panel; }
+    #ruta { width: 100%; padding: 0 4; color: $text; margin-bottom: 0; }
     """
 
     BINDINGS = [
@@ -248,6 +249,8 @@ class BuscadorApp(App):
             _celda_final("Carpeta", ANCHOS["Carpeta"]),
         )
         yield tabla
+        # Ruta completa del archivo resaltado (visible abajo, sin recortar en la tabla)
+        yield Label("", id="ruta")
         yield Footer()
 
     def on_mount(self):
@@ -416,6 +419,22 @@ class BuscadorApp(App):
         ambito = "todo el disco" if self.raices == tuple(raices_por_defecto()) else ", ".join(self.raices)
         estado += f" · Ámbito: {ambito}"
         self.query_one("#estado", Label).update(estado)
+        self._actualizar_ruta()
+
+    def _ruta_resaltada(self):
+        """Ruta completa del archivo resaltado en la tabla ('' si no hay)."""
+        tabla = self.query_one("#resultados", DataTable)
+        i = tabla.cursor_row
+        if 0 <= i < len(self.mostradas):
+            return self.mostradas[i].ruta
+        return ""
+
+    def _actualizar_ruta(self):
+        self.query_one("#ruta", Label).update(f"Ruta: {self._ruta_resaltada()}")
+
+    @on(DataTable.RowHighlighted)
+    def _fila_resaltada(self, event: DataTable.RowHighlighted):
+        self._actualizar_ruta()
 
     @on(DataTable.RowSelected)
     def _abrir_seleccion(self, event: DataTable.RowSelected):
