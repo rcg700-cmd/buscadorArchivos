@@ -430,7 +430,7 @@ class AyudaScreen(ModalScreen):
         ("F6 / F7", "Filtrar: solo PDF / LibreOffice (se apilan)"),
         ("F8 / F9", "Orden por columna / ascendente-descendente"),
         ("F10", "Modo solo duplicados (nombres que se repiten)"),
-        ("F11", "Elegir el usuario a buscar (todos, uno o todo el disco)"),
+        ("Ctrl+U (o F12)", "Elegir el usuario a buscar (todos, uno o todo el disco)"),
         ("Ctrl+Supr", "Enviar a la papelera el archivo resaltado"),
         ("F5", "Reescanear el ámbito actual y actualizar caché"),
         ("Ctrl+D", "Borrar caché y re-escanear de cero"),
@@ -453,9 +453,9 @@ class AyudaScreen(ModalScreen):
         "• Los filtros de tipo (F2..F7) se combinan con lo que escribas.",
         "• F10 activa el modo 'solo duplicados': muestra los nombres que\n"
         "  se repiten en más de una carpeta, agrupados y ordenados A→Z.",
-        "• F11 elige a qué usuario limitar la búsqueda: todos los usuarios,\n"
-        "  uno concreto o todo el disco. El ámbito elegido se recuerda para\n"
-        "  la próxima vez que abras el buscador.",
+        "• Ctrl+U (o F12) elige a qué usuario limitar la búsqueda: todos\n"
+        "  los usuarios, uno concreto o todo el disco. El ámbito elegido se\n"
+        "  recuerda para la próxima vez que abras el buscador.",
         "• Ctrl+Supr envía el resaltado a la papelera (pregunta antes; en\n"
         "  Ubuntu sin trash-cli lo borra definitivamente). Borrar del todo\n"
         "  lo haces tú desde la papelera, fuera del programa.",
@@ -518,7 +518,8 @@ class BuscadorApp(App):
         Binding("f8", "orden_columna", "Cambiar orden", show=False),
         Binding("f9", "orden_direccion", "Asc/Desc", show=False),
         Binding("f10", "modo_duplicados", "Solo duplicados", show=True),
-        Binding("f11", "elegir_usuario", "Elegir usuario", show=True),
+        Binding("ctrl+u", "elegir_usuario", "Elegir usuario", show=True, priority=True),
+        Binding("f12", "elegir_usuario", show=False),  # alternativa: F11 lo captura la terminal
         Binding("ctrl+delete", "enviar_papelera", "Enviar a la papelera", show=True, priority=True),
     ]
 
