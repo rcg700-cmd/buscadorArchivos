@@ -80,7 +80,8 @@ buscador
   - Ubuntu: `~/.cache/buscador-archivo/cache_<hash>.json`
 - Los cambios del disco (archivos creados o borrados después del último escaneo) se reflejan con `F5`.
 - **Al abrir, la caché se verifica en segundo plano:** los archivos ya borrados del disco se descartan de la lista (y se limpian de la caché) sin re-escanear; para detectar los **nuevos** sigue siendo necesario `F5`.
-- **Enviar a la papelera (Ctrl+Supr):** en Windows va a la Papelera de reciclaje y se puede restaurar desde ahí; en Ubuntu usa `trash-put` si está instalado y, si no existe, lo borra definitivamente (con confirmación previa en ambos casos). Los archivos enviados no vuelven a aparecer en la lista aunque llegue un resultado de caché en curso.
+- **Enviar a la papelera (Ctrl+Supr):** en Windows va a la Papelera de reciclaje y se puede restaurar desde ahí; en Ubuntu usa `trash-put` si está instalado y, si no existe, lo borra definitivamente (con confirmación previa en ambos casos). El archivo desaparece de la tabla al instante y no vuelve a aparecer con resultados de caché en curso. El borrado permanente lo haces tú desde la papelera, fuera del programa.
+- **Vigilancia automática:** cada pocos segundos se comprueba en segundo plano que los archivos visibles sigan existiendo; los borrados fuera del buscador (Explorador, papelera, otro equipo...) salen de la tabla solos, sin F5 y sin re-escanear.
 - El tema elegido con `Ctrl+T` se guarda en `preferencias.json` junto a las cachés.
 
 ## Atajos

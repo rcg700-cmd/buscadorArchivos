@@ -27,6 +27,7 @@ from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, L
 from .escaner import Registro, borrar_cache, cargar_cache, guardar_cache, iniciar_escaneo, raices_por_defecto, validar_cache
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
+INTERVALO_VIGILANCIA = 5  # segundos entre chequeos de que los archivos visibles siguen ahí
 
 # Ancho final (en caracteres) de cada columna, separador incluido.
 # Total ~130 columnas; en terminales angostos la tabla permite desplazamiento horizontal.
@@ -245,10 +246,9 @@ class ConfirmarScreen(ModalScreen):
 
     BINDINGS = [Binding("escape", "cancelar", "No, cancelar", priority=True)]
 
-    def __init__(self, mensaje, al_confirmar):
+    def __init__(self, mensaje):
         super().__init__()
         self._mensaje = mensaje
-        self._al_confirmar = al_confirmar  # callback(True) si el usuario acepta
 
     def compose(self):
         with Vertical(id="caja"):
@@ -402,6 +402,9 @@ class AyudaScreen(ModalScreen):
         "• Ctrl+Supr envía el resaltado a la papelera (pregunta antes; en\n"
         "  Ubuntu sin trash-cli lo borra definitivamente). Borrar del todo\n"
         "  lo haces tú desde la papelera, fuera del programa.",
+        "• Si borras archivos desde fuera del buscador (Explorador, etc.),\n"
+        "  la lista se actualiza sola: cada pocos segundos se comprueban\n"
+        "  los archivos visibles y los que ya no existen salen de la tabla.",
         "• Ctrl+T recorre los temas de colores (claros, oscuros…); se recuerda\n"
         "  entre sesiones.",
         "• Carpetas a ignorar: edita excluir.txt (junto a las cachés, carpeta\n"
@@ -474,6 +477,7 @@ class BuscadorApp(App):
         self.duplicados = False  # F10: mostrar solo nombres repetidos
         self._orden_previo = None  # orden a restaurar al apagar el modo duplicados
         self._rutas_borradas = set()  # enviados a papelera (evita que vuelvan como fantasmas)
+        self._vigilando = False  # hay un chequeo de existencia de archivos visibles en vuelo
         self.escaneando = False
         self.de_cache = False  # True mientras la vista provenga (solo) de la caché
         self.panel_abierto = False  # el panel '/' está mostrándose
@@ -507,6 +511,8 @@ class BuscadorApp(App):
             self.theme = tema
         # Revisa la cola 4 veces/segundo (activa solo cuando haya escaneo)
         self.set_interval(0.25, self._recibir)
+        # Vigila que los archivos visibles sigan existiendo (borrados por fuera)
+        self.set_interval(INTERVALO_VIGILANCIA, self._vigilar)
         self._aplicar_raices(self.raices)
 
     def action_cambiar_tema(self):
@@ -689,11 +695,11 @@ class BuscadorApp(App):
         if r is None:
             self.notify("Sin archivo resaltado", severity="warning")
             return
+        # El callback va a push_screen, no al constructor del diálogo
+        # (parámetro al_confirmar no usado: bug v1.2.0 que dejaba la lista sin actualizar)
         self.push_screen(
-            ConfirmarScreen(
-                "¿Enviar a la papelera este archivo?\n" + r.ruta,
-                lambda ok, reg=r: self._borrar_resaltado(reg) if ok else None,
-            )
+            ConfirmarScreen("¿Enviar a la papelera este archivo?\n" + r.ruta),
+            lambda ok, reg=r: self._borrar_resaltado(reg) if ok else None,
         )
 
     def _borrar_resaltado(self, r):
@@ -786,6 +792,9 @@ class BuscadorApp(App):
                 if elemento[0] == "validadas":
                     self._aplicar_validadas(elemento)
                     continue
+                if elemento[0] == "vigilancia":
+                    self._aplicar_vigilancia(elemento)
+                    continue
             r = elemento
             if r.ruta in self.rutas_conocidas or r.ruta in self._rutas_borradas:
                 continue  # ya visible (vía caché o antes), o enviado a la papelera
@@ -797,6 +806,51 @@ class BuscadorApp(App):
         elif hubo_progreso and self.escaneando:
             # Solo la barra de estado (barato): no toca la tabla
             self._pinta_estado(*self._visibles_estado)
+
+    def _vigilar(self):
+        """Cada INTERVALO_VIGILANCIA s comprueba que los archivos visibles existan.
+
+        Cubre los borrados hechos fuera del programa (Explorador, otro gestor,
+        la papelera...) sin esperar a un F5. Solo mira las filas visibles
+        (hasta MAX_MOSTRADOS) para que sea barato; los invisibles se actualizan
+        al buscarlos o al re-ordenar. Un chequeo en vuelo anula el siguiente.
+        """
+        if self.escaneando or self._vigilando or not self.mostradas:
+            return
+        rutas = [r.ruta for r in self.mostradas]
+        gen = self._generacion
+        raices = self.raices
+        self._vigilando = True
+
+        def chequear():
+            try:
+                faltan = [ruta for ruta in rutas if not os.path.exists(ruta)]
+            finally:
+                self._vigilando = False
+            if faltan:
+                self.cola.put(("vigilancia", gen, raices, faltan))
+
+        threading.Thread(target=chequear, daemon=True).start()
+
+    def _aplicar_vigilancia(self, elemento):
+        """Quita de la lista los archivos visibles borrados fuera del programa."""
+        _, gen, raices, faltan = elemento
+        if gen != self._generacion or raices != self.raices or self.escaneando:
+            return  # resultado obsoleto o durante un re-escaneo (la lista ya es otra)
+        faltan = [x for x in faltan if x not in self._rutas_borradas]
+        if not faltan:
+            return
+        faltando = set(faltan)
+        self._rutas_borradas.update(faltando)
+        self.registros = [r for r in self.registros if r.ruta not in faltando]
+        self.rutas_conocidas -= faltando
+        self._firma = None
+        self._refrescar()
+        self.notify(
+            f"{fmt_num(len(faltando))} archivo ya no existe: lista actualizada"
+            if len(faltando) == 1
+            else f"{fmt_num(len(faltando))} archivos ya no existen: lista actualizada"
+        )
 
     def _aplicar_validadas(self, elemento):
         """Aplica el resultado de la validación incremental de la caché.
