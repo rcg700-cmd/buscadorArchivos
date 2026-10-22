@@ -1,4 +1,4 @@
-Buscador de archivos de Office y PDF (v1.1.3)
+Buscador de archivos de Office y PDF (v1.2.0)
 =============================================
 
 Archivo: buscador.exe — ejecutable de Windows, NO requiere instalar Python ni nada más.
@@ -22,6 +22,10 @@ Dentro del programa
 - Ctrl+C: copiar la ruta completa.
 - Ctrl+T: cambiar el tema de colores entre sesiones.
 - F2/F3/F4: filtrar solo Word/Excel/PowerPoint; F6/F7: solo PDF/LibreOffice.
+- F10: modo solo duplicados (los nombres que se repiten en más de una
+  carpeta, agrupados A→Z).
+- Ctrl+Supr: enviar el resaltado a la papelera (pregunta antes; el borrado
+  definitivo lo haces tú desde la papelera, fuera del programa).
 - F8/F9: cambiar el orden (columna / ascendente-descendente); la columna
   activa se ve con una flecha ▲/▼ en su encabezado.
 - Durante el escaneo verás cuántas carpetas quedan en cola.

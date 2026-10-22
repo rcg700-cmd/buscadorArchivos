@@ -1,20 +1,23 @@
-# v1.1.3 — caché verificada al abrir
+# v1.2.0 — modo duplicados y envío a la papelera
 
-Sobre la base v1.1.2 (estética completa) se añade una mejora funcional de la caché:
+Sobre la base v1.1.3 (estética + caché verificada al abrir) se añaden dos funciones nuevas para lidiar con los nombres repetidos:
 
 ## Novedades
 
-- ✅ **Validación incremental de la caché:** al abrir la app (o cambiar de carpeta con `/`), en segundo plano se comprueba que cada archivo de la caché siga existiendo.
-  - Los archivos **borrados** desde el último escaneo desaparecen de la lista al momento, con un aviso (`Caché: 3 archivos ya no existen y se descartaron…`), y la caché en disco se limpia también.
-  - **Sin re-escanear ni retrasar el arranque**: la lista se muestra al instante y la limpieza llega después (una comprobación ligera por archivo).
-  - Si mientras valida haces F5 o cambias de carpeta, ese resultado se cancela y no interfiere.
-  - Los archivos **nuevos** siguen necesitando `F5` (detectarlos sin escanear es imposible).
-
-Sin cambios en la búsqueda ni en los atajos.
+- 🔎 **F10 — Modo solo duplicados:** activa una vista en la que únicamente aparecen los archivos cuyo nombre se repite en más de una carpeta del ámbito actual (insensible a mayúsculas, con extensión: `informe.docx` ≠ `informe.pdf`).
+  - Se agrupan y ordenan automáticamente A→Z, uno al lado del otro, para comparar rutas, fechas y pesos de un vistazo.
+  - Se combina con lo que escribas en el buscador y con los filtros de tipo (F2–F7).
+  - La barra de estado muestra el resumen: `Duplicados: 5 grupos · 12 archivos`.
+  - Al desactivar, la tabla recupera el orden que tenías antes.
+- 🗑️ **Ctrl+Supr — Enviar a la papelera:** envía el archivo resaltado a la papelera tras un diálogo de confirmación (el foco inicial está en "No"; un Enter accidental no borra nada; Esc cancela).
+  - **Windows:** va a la Papelera de reciclaje y se puede restaurar desde ahí.
+  - **Ubuntu:** usa `trash-put` (trash-cli) si está instalado; si no existe, lo borra definitivamente.
+  - El archivo desaparece de la tabla al instante, sin re-escanear, y no vuelve a aparecer con resultados de caché en curso.
+  - El borrado definitivo lo haces tú desde la papelera, fuera del programa — nada se elimina permanentemente desde la app.
 
 ## Descargas
 
-- **Windows (sin instalar nada):** `buscador-windows-1.1.3.zip` → contiene `buscador.exe` (doble clic y listo).
+- **Windows (sin instalar nada):** `buscador-windows-1.2.0.zip` → contiene `buscador.exe` (doble clic y listo).
 - **Código fuente:** clona este repo y sigue el README (`instalar.cmd` / `instalar.sh`).
 
 ## Formatos buscados
