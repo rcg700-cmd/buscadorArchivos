@@ -10,6 +10,7 @@ import json
 import os
 import queue
 import re
+import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -19,8 +20,9 @@ from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Footer, Input, Label, ListItem, ListView, Static
+from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, ListView, Static
 
 from .escaner import Registro, borrar_cache, cargar_cache, guardar_cache, iniciar_escaneo, raices_por_defecto, validar_cache
 
@@ -229,6 +231,48 @@ class CarpetaScreen(ModalScreen):
         self.dismiss()
 
 
+class ConfirmarScreen(ModalScreen):
+    """Diálogo Sí/No para acciones destructivas (Ctrl+Supr). Esc cuenta como No."""
+
+    CSS = """
+    ConfirmarScreen { align: center middle; }
+    #caja { width: 72; max-width: 95%; height: auto;
+            border: round $panel; background: $surface; padding: 1 2; }
+    #mensaje { margin-bottom: 1; }
+    #botones { height: auto; align-horizontal: center; }
+    Button { margin: 0 2; min-width: 14; }
+    """
+
+    BINDINGS = [Binding("escape", "cancelar", "No, cancelar", priority=True)]
+
+    def __init__(self, mensaje, al_confirmar):
+        super().__init__()
+        self._mensaje = mensaje
+        self._al_confirmar = al_confirmar  # callback(True) si el usuario acepta
+
+    def compose(self):
+        with Vertical(id="caja"):
+            yield Static(self._mensaje, id="mensaje")
+            with Horizontal(id="botones"):
+                yield Button("Sí, enviar", variant="error", id="si")
+                yield Button("No, cancelar", variant="default", id="no")
+
+    def on_mount(self):
+        # El foco inicial va a "No": un Enter accidental no borra nada
+        self.query_one("#no", Button).focus()
+
+    @on(Button.Pressed, "#si")
+    def _si(self):
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#no")
+    def _no_boton(self):
+        self.dismiss(False)
+
+    def action_cancelar(self):
+        self.dismiss(False)
+
+
 def abrir_con_sistema(ruta):
     """Abre un archivo o carpeta con la aplicación predeterminada del sistema."""
     try:
@@ -242,6 +286,68 @@ def abrir_con_sistema(ruta):
             )
     except OSError:
         pass
+
+
+def _borrar_papelera_windows(ruta):
+    """Envía a la Papelera de reciclaje de Windows (restaurable desde ahí).
+
+    Usa SHFileOperationW con FOF_ALLOWUNDO. True si el sistema lo hizo bien.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [
+            ("hwnd", wintypes.HWND),
+            ("wFunc", ctypes.c_uint),
+            ("pFrom", ctypes.c_wchar_p),
+            ("pTo", ctypes.c_wchar_p),
+            ("fFlags", wintypes.WORD),
+            ("fAnyOperationsAborted", wintypes.BOOL),
+            ("hNameMappings", ctypes.c_void_p),
+            ("lpszProgressTitle", ctypes.c_wchar_p),
+        ]
+
+    op = SHFILEOPSTRUCTW()
+    op.wFunc = 3  # FO_DELETE
+    op.pFrom = ruta + "\0"  # la API exige doble NUL al final
+    # ALLOWUNDO (papelera) | NOCONFIRMATION | NOERRORUI | SILENT: la TUI ya
+    # pidió confirmación y muestra los resultados ella misma.
+    op.fFlags = 0x40 | 0x10 | 0x400 | 0x4
+    resultado = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+    return resultado == 0 and not op.fAnyOperationsAborted
+
+
+def _enviar_papelera(ruta):
+    """Borra un archivo "suave": papelera si se puede. Devuelve (ok, en_papelera).
+
+    - Windows: papelera de reciclaje (restaurable desde ahí).
+    - Linux: `trash-put` (trash-cli) si está instalado; si no existe, borrado
+      definitivo con os.unlink (comportamiento acordado con el usuario).
+    """
+    if os.name == "nt":
+        try:
+            ok = _borrar_papelera_windows(ruta)
+        except Exception:
+            ok = False
+        return ok, ok
+    exe = shutil.which("trash-put")
+    if exe:
+        try:
+            r = subprocess.run(  # noqa: S603
+                [exe, ruta],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return r.returncode == 0, True
+        except OSError:
+            return False, False
+    try:
+        os.unlink(ruta)
+        return True, False
+    except OSError:
+        return False, False
 
 
 class AyudaScreen(ModalScreen):
@@ -270,6 +376,8 @@ class AyudaScreen(ModalScreen):
         ("F2 / F3 / F4", "Filtrar: solo Word / Excel / PowerPoint"),
         ("F6 / F7", "Filtrar: solo PDF / LibreOffice (se apilan)"),
         ("F8 / F9", "Orden por columna / ascendente-descendente"),
+        ("F10", "Modo solo duplicados (nombres que se repiten)"),
+        ("Ctrl+Supr", "Enviar a la papelera el archivo resaltado"),
         ("F5", "Reescanear el ámbito actual y actualizar caché"),
         ("Ctrl+D", "Borrar caché y re-escanear de cero"),
         ("Esc (en panel)", "Cerrar el panel abierto sin elegir"),
@@ -289,6 +397,11 @@ class AyudaScreen(ModalScreen):
         "• Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el\n"
         "  texto se interpreta como patrón (como el 'dir' de CMD).",
         "• Los filtros de tipo (F2..F7) se combinan con lo que escribas.",
+        "• F10 activa el modo 'solo duplicados': muestra los nombres que\n"
+        "  se repiten en más de una carpeta, agrupados y ordenados A→Z.",
+        "• Ctrl+Supr envía el resaltado a la papelera (pregunta antes; en\n"
+        "  Ubuntu sin trash-cli lo borra definitivamente). Borrar del todo\n"
+        "  lo haces tú desde la papelera, fuera del programa.",
         "• Ctrl+T recorre los temas de colores (claros, oscuros…); se recuerda\n"
         "  entre sesiones.",
         "• Carpetas a ignorar: edita excluir.txt (junto a las cachés, carpeta\n"
@@ -344,6 +457,8 @@ class BuscadorApp(App):
         Binding("f7", "filtro_libre", "Solo LibreOffice", show=False),
         Binding("f8", "orden_columna", "Cambiar orden", show=False),
         Binding("f9", "orden_direccion", "Asc/Desc", show=False),
+        Binding("f10", "modo_duplicados", "Solo duplicados", show=True),
+        Binding("ctrl+delete", "enviar_papelera", "Enviar a la papelera", show=True, priority=True),
     ]
 
     def __init__(self, raices=None):
@@ -356,11 +471,15 @@ class BuscadorApp(App):
         self.texto = ""  # filtro actual
         self.filtros = set()  # tipos activos (F2/F3/F4/F6/F7); vacío = todos
         self.orden = ("nombre", False)  # (columna, descendente); F8/F9
+        self.duplicados = False  # F10: mostrar solo nombres repetidos
+        self._orden_previo = None  # orden a restaurar al apagar el modo duplicados
+        self._rutas_borradas = set()  # enviados a papelera (evita que vuelvan como fantasmas)
         self.escaneando = False
         self.de_cache = False  # True mientras la vista provenga (solo) de la caché
         self.panel_abierto = False  # el panel '/' está mostrándose
         self._progreso = None  # (archivos, carpetas en cola) informado por el escáner
         self._visibles_estado = (0, 0)  # (visibles, ocultas) del último refresco
+        self._duplicados_info = None  # (grupos, archivos) del último refresco (modo F10)
         self._claves_columna = {}  # clave lógica -> ColumnKey del DataTable
         self._generacion = 0  # invalida resultados de hilos de fondo (validación) tras cambiar de ámbito o re-escanear
         self._firma = None  # (texto, total, escaneando, de_cache) para saber si cambió la vista
@@ -545,6 +664,55 @@ class BuscadorApp(App):
         self._firma = None
         self._refrescar()
 
+    def action_modo_duplicados(self):
+        """F10: activa/desactiva el modo 'solo duplicados'.
+
+        Al activarlo se ordena por nombre para que los repetidos queden
+        juntos; al desactivarlo se recupera el orden anterior.
+        """
+        self.duplicados = not self.duplicados
+        if self.duplicados:
+            self._orden_previo = self.orden
+            self.orden = ("nombre", False)
+            self.notify("Modo duplicados: activado")
+        else:
+            if self._orden_previo:
+                self.orden = self._orden_previo
+                self._orden_previo = None
+            self.notify("Modo duplicados: desactivado")
+        self._firma = None
+        self._refrescar()
+
+    def action_enviar_papelera(self):
+        """Ctrl+Supr: envía a la papelera el archivo resaltado (con confirmación)."""
+        r = self._seleccionada()
+        if r is None:
+            self.notify("Sin archivo resaltado", severity="warning")
+            return
+        self.push_screen(
+            ConfirmarScreen(
+                "¿Enviar a la papelera este archivo?\n" + r.ruta,
+                lambda ok, reg=r: self._borrar_resaltado(reg) if ok else None,
+            )
+        )
+
+    def _borrar_resaltado(self, r):
+        """Elimina el registro del disco (papelera si es posible) y de la lista."""
+        ok, en_papelera = _enviar_papelera(r.ruta)
+        if not ok:
+            self.notify("No se pudo enviar a la papelera", severity="error")
+            return
+        self._rutas_borradas.add(r.ruta)
+        self.registros = [x for x in self.registros if x.ruta != r.ruta]
+        self.rutas_conocidas.discard(r.ruta)
+        self._firma = None
+        self._refrescar()
+        self.notify(
+            "Enviado a la papelera: " + r.nombre
+            if en_papelera
+            else "Borrado definitivo (no había papelera): " + r.nombre
+        )
+
     def action_borrar_cache(self):
         """Ctrl+D: borra TODAS las cachés y escanea de cero."""
         habia = borrar_cache()
@@ -619,8 +787,8 @@ class BuscadorApp(App):
                     self._aplicar_validadas(elemento)
                     continue
             r = elemento
-            if r.ruta in self.rutas_conocidas:  # ya visible (vía caché o antes)
-                continue
+            if r.ruta in self.rutas_conocidas or r.ruta in self._rutas_borradas:
+                continue  # ya visible (vía caché o antes), o enviado a la papelera
             self.rutas_conocidas.add(r.ruta)
             self.registros.append(r)
             nuevo = True
@@ -639,7 +807,9 @@ class BuscadorApp(App):
         _, gen, raices, vivas, expiradas = elemento
         if gen != self._generacion or raices != self.raices or not self.de_cache:
             return  # resultado obsoleto: la lista ya se reemplazó por otra cosa
-        # vivas conserva el orden de la caché (ya ordenada al cargarla)
+        # vivas conserva el orden de la caché (ya ordenada al cargarla);
+        # además se excluyen los que el usuario envió a la papelera esta sesión
+        vivas = [x for x in vivas if x.ruta not in self._rutas_borradas]
         self.registros = vivas
         self.rutas_conocidas = {r.ruta for r in vivas}
         self._firma = None
@@ -658,6 +828,8 @@ class BuscadorApp(App):
         - Con comodines: patrón tipo cmd (fnmatch) sobre el nombre completo,
           p. ej. 'informe*', '*.pdf', 'plan?2026'.
         - self.filtros: si tiene tipos, solo se conservan esos.
+        - self.duplicados (F10): conserva solo los nombres que aparecen 2+
+          veces entre lo ya filtrado (por nombre_min, con extensión).
         - self.orden: ('nombre', False) conserva el orden por nombre (el que
           ya trae la lista tras el escaneo/caché); otros criterios ordenan
           el resultado filtrado al vuelo.
@@ -672,6 +844,11 @@ class BuscadorApp(App):
                 filtradas = [r for r in filtradas if t in r.nombre_min]
         if self.filtros:
             filtradas = [r for r in filtradas if r.tipo in self.filtros]
+        if self.duplicados:
+            cuenta = {}
+            for r in filtradas:
+                cuenta[r.nombre_min] = cuenta.get(r.nombre_min, 0) + 1
+            filtradas = [r for r in filtradas if cuenta[r.nombre_min] >= 2]
         columna, descendente = self.orden
         if columna == "nombre" and not descendente:
             return filtradas  # ya viene ordenada por nombre
@@ -718,6 +895,9 @@ class BuscadorApp(App):
         tabla.border_title = titulo_borde
 
         self._visibles_estado = (len(encontradas), ocultas)
+        self._duplicados_info = (
+            (len({r.nombre_min for r in encontradas}), len(encontradas)) if self.duplicados else None
+        )
         self._pinta_estado(len(encontradas), ocultas)
         self._actualizar_ruta()
 
@@ -729,6 +909,9 @@ class BuscadorApp(App):
         if self.filtros:
             estado += " · [green b]Filtros: " + "+".join(sorted(self.filtros)) + "[/]"
         estado += f" · [magenta]Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}[/]"
+        if self.duplicados and self._duplicados_info:
+            grupos, total = self._duplicados_info
+            estado += f" · [cyan b]Duplicados[/]: {fmt_num(grupos)} grupos · {fmt_num(total)} archivos"
         if ocultas > 0:
             estado += f" — las primeras {fmt_num(len(self.mostradas))} (sigue escribiendo)"
         if self.escaneando:

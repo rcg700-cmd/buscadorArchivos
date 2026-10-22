@@ -12,6 +12,8 @@ Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras e
 - 🧹 **Ctrl+D** borra las cachés y re-escanea de cero (también disponible: `buscador --borrar-cache`).
 - 📄 Busca Word (`.doc/.docx/.docm`), Excel (`.xls/.xlsx/.xlsm`), PowerPoint (`.ppt/.pptx/.pptm`), PDF y **LibreOffice** (`.odt/.ods/.odp`).
 - 📊 Cada resultado muestra: **nombre, tipo, fecha de creación, fecha de modificación y peso**.
+- 🔎 **Modo solo duplicados:** con `F10` la tabla muestra únicamente los archivos cuyo nombre se repite en más de una carpeta (agrupados A→Z), ideal para localizar y quitar copias de sobra.
+- 🗑️ **Ctrl+Supr** envía el archivo resaltado a la **papelera de reciclaje** (con confirmación). En Ubuntu sin `trash-cli` lo borra definitivamente. El borrado permanente lo haces tú desde la papelera.
 - 🎨 **Nueva interfaz:** cada tipo de archivo lleva **icono y color propios** (Word azul, Excel verde, PowerPoint naranja, PDF rojo, LibreOffice teal) y el orden activo se ve con una **flecha ▲/▼ en el encabezado** de la columna. Durante el escaneo se ve cuántas carpetas quedan en cola.
 - 🎯 Orden **por nombre (A→Z) por defecto** y configurable con `F8`/`F9` (peso, fechas…); lista navegable con **flechas y ratón**; `Enter` o doble clic abre el archivo con su aplicación predeterminada.
 - 🌗 **Ctrl+T** recorre los temas de colores disponibles (claros y oscuros); la preferencia se recuerda entre sesiones.
@@ -78,6 +80,7 @@ buscador
   - Ubuntu: `~/.cache/buscador-archivo/cache_<hash>.json`
 - Los cambios del disco (archivos creados o borrados después del último escaneo) se reflejan con `F5`.
 - **Al abrir, la caché se verifica en segundo plano:** los archivos ya borrados del disco se descartan de la lista (y se limpian de la caché) sin re-escanear; para detectar los **nuevos** sigue siendo necesario `F5`.
+- **Enviar a la papelera (Ctrl+Supr):** en Windows va a la Papelera de reciclaje y se puede restaurar desde ahí; en Ubuntu usa `trash-put` si está instalado y, si no existe, lo borra definitivamente (con confirmación previa en ambos casos). Los archivos enviados no vuelven a aparecer en la lista aunque llegue un resultado de caché en curso.
 - El tema elegido con `Ctrl+T` se guarda en `preferencias.json` junto a las cachés.
 
 ## Atajos
@@ -95,6 +98,8 @@ buscador
 | F2 / F3 / F4 | Filtrar: solo Word / Excel / PowerPoint |
 | F6 / F7 | Filtrar: solo PDF / LibreOffice (se apilan con lo escrito) |
 | F8 / F9 | Cambiar la columna de orden / alternar ascendente‑descendente |
+| F10 | Modo solo duplicados: solo nombres que se repiten (activa/desactiva) |
+| Ctrl+Supr | Enviar a la papelera el archivo resaltado (pregunta antes) |
 | F5 | Re-escanear el disco y actualizar la caché |
 | Ctrl+D | Borrar caché y re-escanear de cero |
 | F1 | Ayuda: atajos y funciones (pantalla flotante) |
