@@ -5,7 +5,7 @@
 ## Estado del repositorio
 
 - **Proyecto funcional v1:** buscador TUI completado y publicado (ver Stack/Arquitectura abajo). El repo ya no está vacío; no suponga lo contrario.
-- **Release v1.1.3 publicada:** <https://github.com/rcg700-cmd/buscadorArchivos/releases/tag/v1.1.3> con `buscador-windows-1.1.3.zip` (exe standalone: estética v1.1.2 + validación incremental de la caché al abrir). Anteriores: v1.1.2, v1.1.0, v1.0.0.
+- **Release v1.2.0 publicada:** <https://github.com/rcg700-cmd/buscadorArchivos/releases/tag/v1.2.0> con `buscador-windows-1.2.0.zip` (exe standalone: F10 modo solo duplicados + Ctrl+Supr enviar a la papelera con confirmación + todo lo anterior). Anteriores: v1.1.3, v1.1.2, v1.1.0, v1.0.0.
 
 ## Objetivo del proyecto (especificación acordada con el usuario)
 
