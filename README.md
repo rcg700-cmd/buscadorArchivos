@@ -12,6 +12,7 @@ Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras e
 - 🧹 **Ctrl+D** borra las cachés y re-escanea de cero (también disponible: `buscador --borrar-cache`).
 - 📄 Busca Word (`.doc/.docx/.docm`), Excel (`.xls/.xlsx/.xlsm`), PowerPoint (`.ppt/.pptx/.pptm`), PDF y **LibreOffice** (`.odt/.ods/.odp`).
 - 📊 Cada resultado muestra: **nombre, tipo, fecha de creación, fecha de modificación y peso**.
+- 👥 **F11 — Selector de usuario:** delimita la búsqueda a un usuario del equipo (o a todos), con opción de volver a todo el disco. El ámbito elegido se recuerda para la próxima vez.
 - 🔎 **Modo solo duplicados:** con `F10` la tabla muestra únicamente los archivos cuyo nombre se repite en más de una carpeta (agrupados A→Z), ideal para localizar y quitar copias de sobra.
 - 🗑️ **Ctrl+Supr** envía el archivo resaltado a la **papelera de reciclaje** (con confirmación). En Ubuntu sin `trash-cli` lo borra definitivamente. El borrado permanente lo haces tú desde la papelera.
 - 🎨 **Nueva interfaz:** cada tipo de archivo lleva **icono y color propios** (Word azul, Excel verde, PowerPoint naranja, PDF rojo, LibreOffice teal) y el orden activo se ve con una **flecha ▲/▼ en el encabezado** de la columna. Durante el escaneo se ve cuántas carpetas quedan en cola.
@@ -82,6 +83,7 @@ buscador
 - **Al abrir, la caché se verifica en segundo plano:** los archivos ya borrados del disco se descartan de la lista (y se limpian de la caché) sin re-escanear; para detectar los **nuevos** sigue siendo necesario `F5`.
 - **Enviar a la papelera (Ctrl+Supr):** en Windows va a la Papelera de reciclaje y se puede restaurar desde ahí; en Ubuntu usa `trash-put` si está instalado y, si no existe, lo borra definitivamente (con confirmación previa en ambos casos). El archivo desaparece de la tabla al instante y no vuelve a aparecer con resultados de caché en curso. El borrado permanente lo haces tú desde la papelera, fuera del programa.
 - **Vigilancia automática:** cada pocos segundos se comprueba en segundo plano que los archivos visibles sigan existiendo; los borrados fuera del buscador (Explorador, papelera, otro equipo...) salen de la tabla solos, sin F5 y sin re-escanear.
+- **Selector de usuario (F11):** panel con la carpeta base de usuarios (`C:\Users` en Windows, `/home` en Linux), cada usuario existente (marcado "(yo)" el actual) y "todo el disco". Cada ámbito tiene su propia caché (`cache_<sha1>.json`) y la elección se guarda en `preferencias.json` como `raices` (arranca con la última usada; "todo el disco" se guarda como `null` para volver al valor por defecto). Las carpetas de otros usuarios pueden dar "acceso denegado" en fragmentos (AppData de sistema, NTUSER.DAT): el escáner las salta sin fallar.
 - El tema elegido con `Ctrl+T` se guarda en `preferencias.json` junto a las cachés.
 
 ## Atajos
@@ -100,6 +102,7 @@ buscador
 | F6 / F7 | Filtrar: solo PDF / LibreOffice (se apilan con lo escrito) |
 | F8 / F9 | Cambiar la columna de orden / alternar ascendente‑descendente |
 | F10 | Modo solo duplicados: solo nombres que se repiten (activa/desactiva) |
+| F11 | Elegir el usuario a buscar: todos, uno concreto o todo el disco |
 | Ctrl+Supr | Enviar a la papelera el archivo resaltado (pregunta antes) |
 | F5 | Re-escanear el disco y actualizar la caché |
 | Ctrl+D | Borrar caché y re-escanear de cero |

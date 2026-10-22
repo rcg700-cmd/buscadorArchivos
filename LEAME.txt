@@ -1,4 +1,4 @@
-Buscador de archivos de Office y PDF (v1.2.1)
+Buscador de archivos de Office y PDF (v1.3.0)
 =============================================
 
 Archivo: buscador.exe — ejecutable de Windows, NO requiere instalar Python ni nada más.
@@ -24,6 +24,9 @@ Dentro del programa
 - F2/F3/F4: filtrar solo Word/Excel/PowerPoint; F6/F7: solo PDF/LibreOffice.
 - F10: modo solo duplicados (los nombres que se repiten en más de una
   carpeta, agrupados A→Z).
+- F11: elegir a qué usuario limitar la búsqueda (todos los usuarios, uno
+  concreto o todo el disco). El ámbito elegido se recuerda para la próxima
+  vez; también sirve el panel '/' para una carpeta suelta.
 - Ctrl+Supr: enviar el resaltado a la papelera (pregunta antes; el borrado
   definitivo lo haces tú desde la papelera, fuera del programa). Si borras
   archivos desde fuera del buscador, la lista se actualiza sola.

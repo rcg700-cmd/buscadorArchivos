@@ -131,6 +131,34 @@ def _ordenar(lista, orden):
     return lista
 
 
+def _usuarios_del_sistema():
+    """Carpetas de usuario del equipo (C:\\Users\\* en Windows, /home/* en Linux).
+
+    Devuelve (base, usuarios): la carpeta que agrupa a todos los usuarios
+    (para la opción 'Todos los usuarios') y cada carpeta de usuario que
+    exista, ordenada alfabéticamente. Si no hay base (caso raro), (None, []).
+    """
+    try:
+        base = Path.home().parent if os.name == "nt" else Path("/home")
+        if not base.is_dir():
+            return None, []
+        usuarios = []
+        saltar = {"all users", "default", "default user", "desktop.ini"}
+        for ruta in base.iterdir():
+            try:
+                if not ruta.is_dir():
+                    continue
+            except OSError:
+                continue  # sin permiso para ni mirar: no ofrecerla
+            if ruta.name.casefold() in saltar:
+                continue
+            usuarios.append(ruta)
+        usuarios.sort(key=lambda p: p.name.casefold())
+        return base, usuarios
+    except OSError:
+        return None, []
+
+
 def _carpetas_habituales():
     """Carpetas típicas del sistema (solo las que existen), para el panel '/'."""
     home = Path.home()
@@ -230,6 +258,31 @@ class CarpetaScreen(ModalScreen):
 
     def action_cancelar(self):
         self.dismiss()
+
+
+class UsuarioScreen(CarpetaScreen):
+    """Panel F11: elegir a qué usuario limitar la búsqueda (o todos, o todo el disco)."""
+
+    def __init__(self, al_elegir):
+        # No reutiliza CarpetaScreen.__init__: el panel de usuarios solo trae
+        # sus opciones (las carpetas habituales están en el panel '/').
+        ModalScreen.__init__(self)
+        self._al_elegir = al_elegir
+        self.candidatas = [(None, "📁 Todo el disco (todas las unidades / la raíz /)")]
+        base, usuarios = _usuarios_del_sistema()
+        if base:
+            self.candidatas.append((base, f"👥 Todos los usuarios ({base})"))
+        try:
+            usuario_actual = Path.home().resolve()
+        except OSError:
+            usuario_actual = None
+        for ruta in usuarios:
+            try:
+                es_yo = usuario_actual is not None and ruta.resolve() == usuario_actual
+            except OSError:
+                es_yo = False
+            marca = "  (yo)" if es_yo else ""
+            self.candidatas.append((ruta, f"👤 {ruta.name}{marca} — {ruta}"))
 
 
 class ConfirmarScreen(ModalScreen):
@@ -377,6 +430,7 @@ class AyudaScreen(ModalScreen):
         ("F6 / F7", "Filtrar: solo PDF / LibreOffice (se apilan)"),
         ("F8 / F9", "Orden por columna / ascendente-descendente"),
         ("F10", "Modo solo duplicados (nombres que se repiten)"),
+        ("F11", "Elegir el usuario a buscar (todos, uno o todo el disco)"),
         ("Ctrl+Supr", "Enviar a la papelera el archivo resaltado"),
         ("F5", "Reescanear el ámbito actual y actualizar caché"),
         ("Ctrl+D", "Borrar caché y re-escanear de cero"),
@@ -399,6 +453,9 @@ class AyudaScreen(ModalScreen):
         "• Los filtros de tipo (F2..F7) se combinan con lo que escribas.",
         "• F10 activa el modo 'solo duplicados': muestra los nombres que\n"
         "  se repiten en más de una carpeta, agrupados y ordenados A→Z.",
+        "• F11 elige a qué usuario limitar la búsqueda: todos los usuarios,\n"
+        "  uno concreto o todo el disco. El ámbito elegido se recuerda para\n"
+        "  la próxima vez que abras el buscador.",
         "• Ctrl+Supr envía el resaltado a la papelera (pregunta antes; en\n"
         "  Ubuntu sin trash-cli lo borra definitivamente). Borrar del todo\n"
         "  lo haces tú desde la papelera, fuera del programa.",
@@ -461,12 +518,21 @@ class BuscadorApp(App):
         Binding("f8", "orden_columna", "Cambiar orden", show=False),
         Binding("f9", "orden_direccion", "Asc/Desc", show=False),
         Binding("f10", "modo_duplicados", "Solo duplicados", show=True),
+        Binding("f11", "elegir_usuario", "Elegir usuario", show=True),
         Binding("ctrl+delete", "enviar_papelera", "Enviar a la papelera", show=True, priority=True),
     ]
 
     def __init__(self, raices=None):
         super().__init__()
-        self.raices = tuple(raices) if raices else raices_por_defecto()
+        if raices:
+            self.raices = tuple(raices)
+        else:
+            # Sin raíz pedida por terminal: recordar el último ámbito elegido
+            guardadas = _cargar_preferencias().get("raices") or []
+            if guardadas and all(os.path.isdir(x) for x in guardadas):
+                self.raices = tuple(guardadas)
+            else:
+                self.raices = raices_por_defecto()
         self.cola = queue.Queue()  # registros que llegan del hilo de escaneo
         self.registros = []  # todos los archivos conocidos (caché + escaneo)
         self.mostradas = []  # los que pasan el filtro actual (máx. MAX_MOSTRADOS)
@@ -563,7 +629,10 @@ class BuscadorApp(App):
         threading.Thread(target=validar, daemon=True).start()
 
     def _elegir_raiz(self, destino):
-        """Callback del panel '/': carpeta elegida (None = todo el disco)."""
+        """Callback de los paneles '/' (carpeta) y F11 (usuario).
+
+        destino None = todo el disco; en otro caso, la ruta (Path) elegida.
+        """
         if destino is None:
             raices = raices_por_defecto()
             self.notify("Buscando en todo el disco")
@@ -572,7 +641,16 @@ class BuscadorApp(App):
             self.notify(f"Buscando en: {destino}")
         entrada = self.query_one("#entrada", Input)
         entrada.value = ""
+        # El ámbito elegido (usuario incluido) se recuerda para la próxima vez;
+        # "todo el disco" se guarda como None (vuelve al comportamiento por defecto)
+        prefs = _cargar_preferencias()
+        prefs["raices"] = None if destino is None else [str(x) for x in raices]
+        _guardar_preferencias(prefs)
         self._aplicar_raices(raices)
+
+    def action_elegir_usuario(self):
+        """F11: abre el selector de usuario (todos, uno concreto o todo el disco)."""
+        self.push_screen(UsuarioScreen(self._elegir_raiz))
 
     def action_ayuda(self):
         """F1: muestra la ayuda (si no está ya abierta)."""

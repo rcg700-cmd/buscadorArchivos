@@ -1,19 +1,20 @@
-# v1.2.1 — borrado que funciona y lista que se actualiza sola
+# v1.3.0 — elegir a qué usuario buscar (F11)
 
-Corrección de la v1.2.0 y una mejora aprovechando el viaje:
+Nueva función para equipos compartidos: ya no hace falta buscar en todo el disco si solo te interesan los archivos de una persona.
 
-## Corregido
+## Novedades
 
-- 🐞 **Ctrl+Supr no borraba:** en v1.2.0 la confirmación con "Sí, enviar" cerraba el diálogo **sin borrar el archivo** (el código del borrado no quedaba conectado al botón). El envío a la papelera con confirmación funciona ya de verdad, probado de punta a punta con archivos reales.
-
-## Nuevo
-
-- ♻️ **La lista se actualiza sola:** cada 5 segundos se comprueba en segundo plano que los archivos visibles sigan existiendo. Si borras alguno **desde fuera del programa** (Explorador de archivos, papelera, otro gestor...), esa fila desaparece de la tabla al momento — sin F5 y sin re-escanear. Los avisos lo anuncian en la barra de estado.
-- (Todo lo de v1.2.0 se mantiene: modo **F10 solo duplicados** y **F5 re-escaneo**, entre otras.)
+- 👥 **F11 — Selector de usuario:** abre un panel con:
+  - `📁 Todo el disco` (comportamiento de siempre: todas las unidades / la raíz `C:\`).
+  - `👥 Todos los usuarios` (escanea la carpeta que agrupa a los usuarios: `C:\Users` en Windows, `/home` en Linux).
+  - `👤` cada usuario del equipo, uno por línea — el tuyo se marca con `(yo)`.
+  - Hay campo de filtro: escribe parte del nombre y la lista se acorta al instante.
+- 💾 **Se recuerda tu elección:** el ámbito elegido (usuario, carpeta del panel `/` o todo el disco) queda guardado y la próxima vez que abra el buscador arranca justo donde lo dejaste. Cada ámbito tiene su propia caché, así que alternar entre usuarios no obliga a re-escanear.
+- ⚠️ Nota: al buscar en la carpeta de **otro** usuario, algunas subcarpetas protegidas (AppData de sistema, `NTUSER.DAT`...) se saltan por permisos de Windows — es lo esperado y el programa no se detiene por ello.
 
 ## Descargas
 
-- **Windows (sin instalar nada):** `buscador-windows-1.2.1.zip` → contiene `buscador.exe` (doble clic y listo).
+- **Windows (sin instalar nada):** `buscador-windows-1.3.0.zip` → contiene `buscador.exe` (doble clic y listo).
 - **Código fuente:** clona este repo y sigue el README (`instalar.cmd` / `instalar.sh`).
 
 ## Formatos buscados
