@@ -1160,6 +1160,17 @@ def main(raices=None):
     BuscadorApp(list(raices) if raices else None).run()
 
 
+def raices_validas(args):
+    """Separa las rutas pedidas por terminal entre existentes y no.
+
+    Devuelve (validas, invalidas) conservando el orden. La CLI usa esto para
+    avisar (y no escanear) carpetas inexistentes o flags desconocidos.
+    """
+    validas = [a for a in args if os.path.isdir(a)]
+    invalidas = [a for a in args if not os.path.isdir(a)]
+    return validas, invalidas
+
+
 def cli(argv=None):
     """Entrada de comandos compartida por `python -m buscador` y el exe.
 
@@ -1175,4 +1186,7 @@ def cli(argv=None):
     if "--borrar-cache" in args:
         args.remove("--borrar-cache")
         print("Caché borrada." if borrar_cache() else "No había caché guardada.")
-    main(args if args else None)
+    validas, invalidas = raices_validas(args)
+    for ruta in invalidas:
+        print(f"Aviso: la carpeta no existe y se ignora: {ruta}")
+    main(validas if validas else None)
