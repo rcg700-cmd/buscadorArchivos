@@ -570,6 +570,10 @@ class BuscadorApp(App):
 
     def __init__(self, raices=None):
         super().__init__()
+        # Consulta UNA sola vez por sesión las raíces "todo el disco": en
+        # Windows son ~26 os.path.exists (una por letra de unidad) y la barra
+        # de estado se repinta varias veces por segundo (hot path).
+        self._raices_defecto = tuple(raices_por_defecto())
         if raices:
             self.raices = tuple(raices)
         else:
@@ -578,7 +582,7 @@ class BuscadorApp(App):
             if guardadas and all(os.path.isdir(x) for x in guardadas):
                 self.raices = tuple(guardadas)
             else:
-                self.raices = raices_por_defecto()
+                self.raices = self._raices_defecto
         self.cola = queue.Queue()  # registros que llegan del hilo de escaneo
         self.registros = []  # todos los archivos conocidos (caché + escaneo)
         self.mostradas = []  # los que pasan el filtro actual (máx. MAX_MOSTRADOS)
@@ -680,7 +684,7 @@ class BuscadorApp(App):
         destino None = todo el disco; en otro caso, la ruta (Path) elegida.
         """
         if destino is None:
-            raices = raices_por_defecto()
+            raices = self._raices_defecto
             self.notify("Buscando en todo el disco")
         else:
             raices = (str(destino),)
@@ -1117,7 +1121,7 @@ class BuscadorApp(App):
             estado = f"[yellow b]⏳ Escaneando…[/]{extra}. " + estado
         elif self.de_cache:
             estado = "[cyan]💾 Datos de caché[/] ([i]F5 re-escanear[/]). " + estado
-        ambito = "todo el disco" if self.raices == tuple(raices_por_defecto()) else ", ".join(self.raices)
+        ambito = "todo el disco" if self.raices == self._raices_defecto else ", ".join(self.raices)
         estado += f" · [i]Ámbito: {ambito}[/]"
         self.query_one("#estado", Label).update(estado)
 
