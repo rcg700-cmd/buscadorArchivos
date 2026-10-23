@@ -1,12 +1,14 @@
-# Compila el binario de Linux y lo adjunta a cada release.
-# PyInstaller no hace cross-compile desde Windows, por eso el build corre
-# en ubuntu-latest. El exe de Windows se compila localmente (ver AGENTS.md).
+# Compila los binarios y los adjunta a cada release.
+# PyInstaller no hace cross-compile, así que cada SO lo compila en su runner
+# con la MISMA matriz de pasos: prueba de humo -> PyInstaller -> zip -> gh upload.
 #
 # Disparadores:
-#  - Se publica una release  -> compila y adjunta buscador-linux-<version>.zip
-#  - workflow_dispatch       -> solo compila y corre la prueba de humo (validación manual)
+#  - Se publica una release  -> compila y adjunta buscador-linux-<ver>.zip y
+#    buscador-windows-<ver>.zip a esa release.
+#  - workflow_dispatch       -> solo compila y corre las pruebas (validación manual,
+#    no toca ninguna release).
 
-name: Release Linux
+name: Release
 
 on:
   release:
@@ -17,8 +19,17 @@ permissions:
   contents: write
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sistema: linux
+            runner: ubuntu-latest
+          - sistema: windows
+            runner: windows-latest
+    name: ${{ matrix.sistema }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,10 +40,10 @@ jobs:
       - name: Instalar dependencias
         run: python -m pip install -r requirements.txt pyinstaller
 
-      - name: Pruebas headless (escáner + TUI)
+      - name: Pruebas headless
         run: python tests/run_all.py
 
-      - name: Compilar el binario de Linux
+      - name: Compilar el binario
         run: >-
           python -m PyInstaller --onefile --console --name buscador --clean
           --noconfirm --paths . buscador_exe.py
@@ -41,26 +52,34 @@ jobs:
           --exclude-module numpy --exclude-module pandas --exclude-module pytest
           --exclude-module setuptools
 
+      # zip sin asuma 'zip' instalado (ubuntu) ni shells distintas (windows):
+      # Python hace el empaquetado igual en ambos.
       - name: Empaquetar zip (buscador + LEAME)
         env:
           TAG: ${{ github.event.release.tag_name || 'test' }}
+          SISTEMA: ${{ matrix.sistema }}
+        shell: python
         run: |
-          VER="${TAG#v}"
-          python - "$VER" <<'PY'
-          import sys
+          import os
           import zipfile
+          from pathlib import Path
 
-          ver = sys.argv[1]
-          ruta = f"dist/buscador-linux-{ver}.zip"
+          sistema = os.environ["SISTEMA"]
+          tag = os.environ["TAG"]
+          ver = tag[1:] if tag.startswith("v") else tag
+          exe = Path("dist/buscador.exe") if sistema == "windows" else Path("dist/buscador")
+          assert exe.exists(), f"no está el binario compilado: {exe}"
+          ruta = f"dist/buscador-{sistema}-{ver}.zip"
           with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
-              z.write("dist/buscador", "buscador")
+              z.write(exe, exe.name)
               z.write("LEAME.txt", "LEAME.txt")
           print("zip:", ruta)
-          PY
 
       - name: Adjuntar zip a la release
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" "dist/buscador-linux-${TAG#v}.zip" --clobber
+          SISTEMA: ${{ matrix.sistema }}
+        shell: bash
+        run: gh release upload "$TAG" "dist/buscador-${SISTEMA}-${TAG#v}.zip" --clobber
