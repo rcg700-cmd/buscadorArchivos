@@ -1,7 +1,10 @@
-Buscador de archivos de Office y PDF (v1.3.1)
+Buscador de archivos de Office y PDF (v1.4.0)
 =============================================
 
 Archivo: buscador.exe — ejecutable de Windows, NO requiere instalar Python ni nada más.
+En la misma release puede descargar buscador-linux-1.4.0.zip, el binario
+para Ubuntu (no requiere Python; descomprima y ejecute ./buscador en una
+terminal).
 
 Cómo usarlo
 -----------
@@ -20,6 +23,8 @@ Dentro del programa
   PowerPoint naranja, PDF rojo, LibreOffice teal.
 - Ctrl+O: abrir la carpeta del archivo resaltado.
 - Ctrl+C: copiar la ruta completa.
+- Ctrl+E: exportar los resultados de tu búsqueda (con los filtros y el
+  orden actuales) a un CSV en el Escritorio; lo abre Excel.
 - Ctrl+T: cambiar el tema de colores entre sesiones.
 - F2/F3/F4: filtrar solo Word/Excel/PowerPoint; F6/F7: solo PDF/LibreOffice.
 - F10: modo solo duplicados (los nombres que se repiten en más de una
@@ -47,7 +52,7 @@ Con carpetas concretas
 buscador.exe "C:\Users\tuusuario\Documents"
 buscador.exe D:\Docs E:\Archivos
 
-Formatos: Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx),
-PDF y LibreOffice (.odt/.ods/.odp).
+Formatos: Word (.doc/.docx/.docm), Excel (.xls/.xlsx/.xlsm),
+PowerPoint (.ppt/.pptx/.pptm), PDF y LibreOffice (.odt/.ods/.odp).
 Código fuente y actualizaciones: https://github.com/rcg700-cmd/buscadorArchivos
 Licencia MIT.

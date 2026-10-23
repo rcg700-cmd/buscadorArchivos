@@ -5,6 +5,7 @@
   el archivo seleccionado con la aplicación predeterminada.
 """
 
+import csv
 import fnmatch
 import json
 import os
@@ -13,6 +14,7 @@ import re
 import shutil
 import subprocess
 import threading
+from datetime import datetime
 from pathlib import Path
 
 from rich.cells import cell_len
@@ -129,6 +131,23 @@ def _ordenar(lista, orden):
     columna, descendente = orden
     lista.sort(key=lambda r: _clave_de_orden(r, columna), reverse=descendente)
     return lista
+
+
+def carpeta_exportacion():
+    """Carpeta donde dejar el CSV: el Escritorio si existe, si no el home."""
+    hogar = Path.home()
+    candidatos = (hogar / "Desktop", hogar / "OneDrive" / "Desktop", hogar)
+    return next((c for c in candidatos if c.is_dir()), hogar)
+
+
+def exportar_csv(datos, ruta):
+    """Escribe los registros en un CSV (separador ';', UTF-8 con BOM para Excel)."""
+    with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(("Nombre", "Tipo", "Creado", "Modificado", "Peso (bytes)", "Carpeta", "Ruta completa"))
+        for r in datos:
+            w.writerow((r.nombre, r.tipo, fmt_fecha(r.creado), fmt_fecha(r.modificado), r.tamano, os.path.dirname(r.ruta), r.ruta))
+    return ruta
 
 
 def _usuarios_del_sistema():
@@ -425,6 +444,7 @@ class AyudaScreen(ModalScreen):
         ("Enter / doble clic", "Abrir el archivo con su aplicación"),
         ("Ctrl+O", "Abrir la carpeta contenedora del archivo resaltado"),
         ("Ctrl+C", "Copiar la ruta completa al portapapeles"),
+        ("Ctrl+E", "Exportar los resultados filtrados a un CSV (en el Escritorio)"),
         ("Ctrl+T", "Cambiar el tema de colores (se recuerda entre sesiones)"),
         ("F2 / F3 / F4", "Filtrar: solo Word / Excel / PowerPoint"),
         ("F6 / F7", "Filtrar: solo PDF / LibreOffice (se apilan)"),
@@ -440,8 +460,9 @@ class AyudaScreen(ModalScreen):
     )
 
     FUNCIONES = (
-        "• Busca Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx),\n"
-        "  PDF y LibreOffice (.odt/.ods/.odp) [i]por nombre del archivo[/].",
+        "• Busca Word (.doc/.docx/.docm), Excel (.xls/.xlsx/.xlsm),\n"
+        "  PowerPoint (.ppt/.pptx/.pptm), PDF y LibreOffice (.odt/.ods/.odp)\n"
+        "  [i]por nombre del archivo[/].",
         "• Escaneo en paralelo del disco con resultados en vivo; la búsqueda\n"
         "  funciona mientras escanea y verá cuántas carpetas quedan.",
         "• Caché por ámbito (disco completo y cada carpeta elegida con el panel\n"
@@ -462,6 +483,8 @@ class AyudaScreen(ModalScreen):
         "• Si borras archivos desde fuera del buscador (Explorador, etc.),\n"
         "  la lista se actualiza sola: cada pocos segundos se comprueban\n"
         "  los archivos visibles y los que ya no existen salen de la tabla.",
+        "• Ctrl+E exporta los resultados de tu búsqueda (los que ves, con sus\n"
+        "  filtros y su orden) a un CSV en el Escritorio; lo abre Excel.\n"
         "• Ctrl+T recorre los temas de colores (claros, oscuros…); se recuerda\n"
         "  entre sesiones.",
         "• Carpetas a ignorar: edita excluir.txt (junto a las cachés, carpeta\n"
@@ -509,6 +532,7 @@ class BuscadorApp(App):
         Binding("escape", "quit", "Salir a la terminal", show=True),
         Binding("ctrl+o", "abrir_carpeta", "Abrir carpeta del archivo", show=False, priority=True),
         Binding("ctrl+c", "copiar_ruta", "Copiar ruta", show=False, priority=True),
+        Binding("ctrl+e", "exportar_csv", "Exportar resultados a CSV", show=True, priority=True),
         Binding("ctrl+t", "cambiar_tema", "Cambiar tema", show=True, priority=True),
         Binding("f2", "filtro_word", "Solo Word", show=False),
         Binding("f3", "filtro_excel", "Solo Excel", show=False),
@@ -708,6 +732,25 @@ class BuscadorApp(App):
             return
         ok = self._copiar(r.ruta)
         self.notify("Ruta copiada" if ok else "No se pudo copiar la ruta")
+
+    def action_exportar_csv(self):
+        """Ctrl+E: exporta los resultados filtrados actuales a un CSV.
+
+        Respeta el texto buscado, los filtros de tipo, el modo duplicados y
+        el orden actual; no se limita al máximo de filas en pantalla.
+        """
+        datos = self._encontradas()
+        if not datos:
+            self.notify("No hay resultados que exportar", severity="warning")
+            return
+        nombre = f"buscador_resultados_{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
+        ruta = carpeta_exportacion() / nombre
+        try:
+            exportar_csv(datos, ruta)
+        except OSError as e:
+            self.notify(f"No se pudo exportar el CSV:\n{e}", severity="error")
+            return
+        self.notify(f"Exportados {fmt_num(len(datos))} resultados a:\n{ruta}")
 
     def _toggle_filtro(self, tipo):
         """F2/F3/F4/F6/F7: activa o desactiva el filtro de un tipo."""

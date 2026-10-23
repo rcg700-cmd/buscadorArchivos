@@ -13,16 +13,25 @@ from buscador.escaner import iniciar_escaneo
 def run():
     base = Path(tempfile.mkdtemp(prefix="buscador_escaner_"))
     (base / "docs").mkdir()
-    (base / "docs" / "prueba.docx").write_bytes(b"prueba")
-    (base / "docs" / "notas.xlsx").write_bytes(b"prueba")
+    # un archivo por formato admitido (incluidos los de macro) + uno ajeno
+    esperados = {
+        "w.doc": "Word", "w.docx": "Word", "w.docm": "Word",
+        "e.xls": "Excel", "e.xlsx": "Excel", "e.xlsm": "Excel",
+        "p.ppt": "PowerPoint", "p.pptx": "PowerPoint", "p.pptm": "PowerPoint",
+        "d.pdf": "PDF",
+        "l.odt": "LibreOffice", "l.ods": "LibreOffice", "l.odp": "LibreOffice",
+    }
+    for nombre in esperados:
+        (base / nombre).write_bytes(b"prueba")
+    (base / "ignorado.txt").write_bytes(b"ajeno")
     hilo, cola = iniciar_escaneo([str(base)], guardar=False)
     hilo.start()
     while True:
         mensaje = cola.get(timeout=120)
         if isinstance(mensaje, tuple) and mensaje[0] == "fin":
-            nombres = {r.nombre for r in mensaje[1]}
-            assert nombres == {"prueba.docx", "notas.xlsx"}, nombres
-            print("OK escaner: encontro los 2 archivos:", sorted(nombres))
+            tipos = {r.nombre: r.tipo for r in mensaje[1]}
+            assert tipos == esperados, tipos
+            print(f"OK escaner: {len(esperados)} formatos con su tipo correcto (sin el .txt)")
             break
     shutil.rmtree(base, ignore_errors=True)
     print("TODO OK")

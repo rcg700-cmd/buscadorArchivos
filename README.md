@@ -15,6 +15,7 @@ Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras e
 - ⌨️ **Selector de usuario con `Ctrl+U`** (o `F12`): delimita la búsqueda a un usuario del equipo (o a todos), con opción de volver a todo el disco. El ámbito elegido se recuerda para la próxima vez. *(Se cambió de F11 → Ctrl+U porque Windows Terminal y la consola clásica capturan F11 para pantalla completa y la tecla no llega al programa.)*
 - 🔎 **Modo solo duplicados:** con `F10` la tabla muestra únicamente los archivos cuyo nombre se repite en más de una carpeta (agrupados A→Z), ideal para localizar y quitar copias de sobra.
 - 🗑️ **Ctrl+Supr** envía el archivo resaltado a la **papelera de reciclaje** (con confirmación). En Ubuntu sin `trash-cli` lo borra definitivamente. El borrado permanente lo haces tú desde la papelera.
+- 📤 **Ctrl+E exporta los resultados** de tu búsqueda (texto escrito, filtros de tipo, modo duplicados y orden actuales) a un CSV en el Escritorio, listo para abrir con Excel.
 - 🎨 **Nueva interfaz:** cada tipo de archivo lleva **icono y color propios** (Word azul, Excel verde, PowerPoint naranja, PDF rojo, LibreOffice teal) y el orden activo se ve con una **flecha ▲/▼ en el encabezado** de la columna. Durante el escaneo se ve cuántas carpetas quedan en cola.
 - 🎯 Orden **por nombre (A→Z) por defecto** y configurable con `F8`/`F9` (peso, fechas…); lista navegable con **flechas y ratón**; `Enter` o doble clic abre el archivo con su aplicación predeterminada.
 - 🌗 **Ctrl+T** recorre los temas de colores disponibles (claros y oscuros); la preferencia se recuerda entre sesiones.
@@ -99,6 +100,7 @@ buscador
 | Enter / doble clic | Abrir archivo seleccionado |
 | Ctrl+O | Abrir la carpeta contenedora del archivo resaltado |
 | Ctrl+C | Copiar la ruta completa al portapapeles |
+| Ctrl+E | Exportar los resultados filtrados a un CSV (en el Escritorio) |
 | Ctrl+T | Cambiar el tema de colores (se recuerda entre sesiones) |
 | F2 / F3 / F4 | Filtrar: solo Word / Excel / PowerPoint |
 | F6 / F7 | Filtrar: solo PDF / LibreOffice (se apilan con lo escrito) |
