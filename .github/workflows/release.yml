@@ -29,29 +29,8 @@ jobs:
       - name: Instalar dependencias
         run: python -m pip install -r requirements.txt pyinstaller
 
-      - name: Prueba rápida del escáner (sin TUI)
-        run: |
-          python -c "import buscador.escaner, buscador.app"
-          python - <<'PY'
-          import pathlib
-          import tempfile
-
-          from buscador.escaner import iniciar_escaneo
-
-          base = pathlib.Path(tempfile.mkdtemp())
-          (base / "docs").mkdir()
-          (base / "docs" / "prueba.docx").write_bytes(b"prueba")
-          hilo, cola = iniciar_escaneo([str(base)], guardar=False)
-          hilo.start()
-          while True:
-              mensaje = cola.get(timeout=120)
-              if isinstance(mensaje, tuple) and mensaje[0] == "fin":
-                  archivos = mensaje[1]
-                  assert len(archivos) == 1, archivos
-                  assert archivos[0].nombre == "prueba.docx", archivos
-                  print("OK escaner:", archivos[0].ruta)
-                  break
-          PY
+      - name: Pruebas headless (escáner + TUI)
+        run: python tests/run_all.py
 
       - name: Compilar el binario de Linux
         run: >-

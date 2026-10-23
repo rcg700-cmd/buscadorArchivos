@@ -125,6 +125,14 @@ node_modules
 C:\Users\*\AppData\Local\Packages
 ```
 
+## Pruebas
+
+El repo trae pruebas headless (sin abrir la TUI de verdad) que también corren en GitHub Actions antes de cada build de Linux:
+
+```bash
+python tests/run_all.py
+```
+
 ## Estructura del código
 
 ```
