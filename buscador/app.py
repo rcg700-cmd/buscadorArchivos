@@ -421,7 +421,9 @@ def _enviar_papelera(ruta):
     if os.name == "nt":
         try:
             ok = _borrar_papelera_windows(ruta)
-        except Exception:
+        except (OSError, ValueError):
+            # El backend de Windows falló (winerror de la API, o una ruta con
+            # NUL incrustado que ctypes rechaza): no hubo papelera.
             ok = False
         return ok, ok
     exe = shutil.which("trash-put")
@@ -1084,10 +1086,10 @@ class BuscadorApp(App):
                 _celda_final(os.path.dirname(r.ruta), ANCHOS["Carpeta"], ESTILO_META),
                 key=str(i),
             )
-        try:
+        # Se restaura el resaltado solo si la fila sigue existiendo
+        # (move_cursor lanza si el índice se sale de la tabla reconstruida)
+        if 0 <= fila_cursor < len(self.mostradas):
             tabla.move_cursor(row=fila_cursor)
-        except Exception:
-            pass
 
         # Borde de la tabla con el total visible (independiente de la barra de estado)
         titulo_borde = f"Resultados: {fmt_num(len(encontradas))}"

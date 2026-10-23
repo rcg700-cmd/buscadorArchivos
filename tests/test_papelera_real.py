@@ -57,6 +57,22 @@ async def main():
         assert "Encontrados" in estado
         print("OK flujo real: clic en Si borra el archivo y la fila de la lista")
 
+    # --- fallo del backend de papelera: (False, False), nunca excepción
+    original = app_mod._borrar_papelera_windows
+    if os.name == "nt":
+        for error in (ValueError("nul"), OSError("winerror")):
+            def romper(_ruta, _error=error):
+                raise _error
+            app_mod._borrar_papelera_windows = romper
+            ok, en_papelera = app_mod._enviar_papelera(r"C:\no\importa")
+            assert not ok and not en_papelera, (ok, en_papelera)
+        del romper
+    app_mod._borrar_papelera_windows = original
+    print("OK _enviar_papelera: fallo del backend se traduce en (False, False)")
+
+    shutil.rmtree(base, ignore_errors=True)
+    print("TODO OK")
+
     shutil.rmtree(base, ignore_errors=True)
     print("TODO OK")
 
