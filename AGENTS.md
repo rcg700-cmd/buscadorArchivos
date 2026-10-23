@@ -66,6 +66,8 @@ Buscador de archivos de suites ofimáticas para escritorio:
 
 ## Quirks conocidos
 
+- **Rutas esperadas en pruebas: siempre con `os.path.join`, nunca con separador hardcodeado** (v1.4.0: el primer run de release falló porque `test_exportacion.py` esperaba `C:\Docs\archivo.docx` y en Linux `os.path.join` produce `C:\Docs/archivo.docx`).
+
 - En Linux `st_ctime` no es fecha de creación real (no es legible en general); se muestra tal cual en la columna "Creado".
 - La caché muestra el estado del último escaneo: los archivos creados/borrados desde entonces solo se reflejan tras F5. La primera vez (sin caché) el escaneo de todo el disco puede tardar minutos. Cada ámbito (disco completo, una carpeta del panel `/`) tiene su propio archivo de caché (`cache_<sha1>.json`).
 - Los placeholders de OneDrive (`st.stat()` sobre archivos "solo en la nube") son lentos; en carpetas OneDrive el escaneo tarda aunque sea paralelo. En discos HDD la aceleración paralela también es limitada (cuello de botella físico).
