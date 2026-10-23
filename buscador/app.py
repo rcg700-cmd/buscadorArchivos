@@ -110,11 +110,6 @@ def fmt_num(n):
     return f"{n:,}".replace(",", ".")
 
 
-def _clave_orden(r):
-    """Orden alfabético por nombre (insensible a mayúsculas) + ruta de desempate."""
-    return (r.nombre_min, r.ruta)
-
-
 def _clave_de_orden(r, columna):
     """Clave de orden por columna; con desempate por nombre y ruta."""
     if columna == "tamano":
@@ -804,18 +799,22 @@ class BuscadorApp(App):
     def action_filtro_libre(self):
         self._toggle_filtro("LibreOffice")
 
+    def _avisa_orden(self):
+        """Aviso común de F8/F9 con la columna y la dirección actuales."""
+        self.notify(f"Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}")
+
     def action_orden_columna(self):
         """F8: cicla la columna de orden (Nombre → Modificado → Peso → Creado)."""
         i = COLUMNAS_ORDEN.index(self.orden[0])
         self.orden = (COLUMNAS_ORDEN[(i + 1) % len(COLUMNAS_ORDEN)], self.orden[1])
-        self.notify(f"Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}")
+        self._avisa_orden()
         self._firma = None
         self._refrescar()
 
     def action_orden_direccion(self):
         """F9: alterna ascendente/descendente."""
         self.orden = (self.orden[0], not self.orden[1])
-        self.notify(f"Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}")
+        self._avisa_orden()
         self._firma = None
         self._refrescar()
 
