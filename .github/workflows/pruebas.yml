@@ -1,0 +1,35 @@
+# Pruebas rápidas en cada push a master (y en cada PR).
+# El workflow de release también corre el suite completo antes de compilar,
+# pero solo en releases/dispatch; esto da aviso temprano con cada cambio.
+name: Pruebas
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sistema: linux
+            runner: ubuntu-latest
+          - sistema: windows
+            runner: windows-latest
+    name: pruebas-${{ matrix.sistema }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt
+
+      - name: Suite headless
+        run: python tests/run_all.py
