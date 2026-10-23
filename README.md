@@ -42,6 +42,8 @@ buscador "C:\Users\rcg70\Documents"
 
 ### Linux Ubuntu (terminal)
 
+> **Sin instalar nada:** cada release sube también `buscador-linux-<versión>.zip` (compilado automáticamente con GitHub Actions). Descarga el zip de [Releases](https://github.com/rcg700-cmd/buscadorArchivos/releases), descomprímelo y ejecuta `./buscador`.
+
 ```bash
 # 1. Ve a la carpeta del proyecto
 cd buscadorArchivos

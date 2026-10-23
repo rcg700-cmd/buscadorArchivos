@@ -73,7 +73,9 @@ Buscador de archivos de suites ofimáticas para escritorio:
 - `_actualizar_ruta` es defensiva (`except Exception: pass`): durante el teardown de pruebas headless un `RowHighlighted` puede llegar cuando el Label `#ruta` ya está desmontado.
 - Durante pruebas de exclusiones con `python -c` en PowerShell, los backslashes y `*` del patrón sufren doble escape; usar un script .py temporal en su lugar.
 
+- **CI/CD de Linux (v1.3.2+):** `.github/workflows/release.yml` — en cada release publicada corre en `ubuntu-latest`: instala deps, prueba de humo del escáner (escaneo de una carpetita en temporal, hilos + cola, `guardar=False`), compila con PyInstaller (mismos excludes que Windows, entrada `buscador_exe.py`), empaqueta `buscador-linux-<ver>.zip` (buscador + LEAME con `python -m zipfile` en script heredoc; `zip` no se asume preinstalado) y lo adjunta con `gh release upload ... --clobber` usando `GH_TOKEN: ${{ github.token }}`. Trigger adicional `workflow_dispatch` (solo compila/valida, no sube nada). El exe de Windows sigue compilándose localmente (AGENTS.md lo detalla); v1.3.2 = primera release donde publiquemos ambos zips juntos.
+
 ## Próximos pasos pendientes
 
 1. Al añadir funcionalidades nuevas, actualizar este archivo con los comandos y quirks reales.
-2. Posibles mejoras futuras: workflow de GitHub Actions (`.github/workflows/release.yml`) para compilar en Ubuntu el binario de Linux en cada release (PyInstaller no hace cross-compile desde Windows). El usuario pidió empezar por la validación de caché (hecha en v1.1.2+); el workflow queda como siguiente alternativo.
+2. **Posibles mejoras futuras:** tests headless del repositorio corriendo en el workflow de Actions (hoy el workflow solo corre una prueba de humo del escáner); job de Windows en Actions (hoy el exe de Windows se compila localmente).

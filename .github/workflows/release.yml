@@ -1,0 +1,87 @@
+# Compila el binario de Linux y lo adjunta a cada release.
+# PyInstaller no hace cross-compile desde Windows, por eso el build corre
+# en ubuntu-latest. El exe de Windows se compila localmente (ver AGENTS.md).
+#
+# Disparadores:
+#  - Se publica una release  -> compila y adjunta buscador-linux-<version>.zip
+#  - workflow_dispatch       -> solo compila y corre la prueba de humo (validación manual)
+
+name: Release Linux
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Prueba rápida del escáner (sin TUI)
+        run: |
+          python -c "import buscador.escaner, buscador.app"
+          python - <<'PY'
+          import pathlib
+          import tempfile
+
+          from buscador.escaner import iniciar_escaneo
+
+          base = pathlib.Path(tempfile.mkdtemp())
+          (base / "docs").mkdir()
+          (base / "docs" / "prueba.docx").write_bytes(b"prueba")
+          hilo, cola = iniciar_escaneo([str(base)], guardar=False)
+          hilo.start()
+          while True:
+              mensaje = cola.get(timeout=120)
+              if isinstance(mensaje, tuple) and mensaje[0] == "fin":
+                  archivos = mensaje[1]
+                  assert len(archivos) == 1, archivos
+                  assert archivos[0].nombre == "prueba.docx", archivos
+                  print("OK escaner:", archivos[0].ruta)
+                  break
+          PY
+
+      - name: Compilar el binario de Linux
+        run: >-
+          python -m PyInstaller --onefile --console --name buscador --clean
+          --noconfirm --paths . buscador_exe.py
+          --exclude-module PIL --exclude-module tkinter --exclude-module jedi
+          --exclude-module IPython --exclude-module matplotlib
+          --exclude-module numpy --exclude-module pandas --exclude-module pytest
+          --exclude-module setuptools
+
+      - name: Empaquetar zip (buscador + LEAME)
+        env:
+          TAG: ${{ github.event.release.tag_name || 'test' }}
+        run: |
+          VER="${TAG#v}"
+          python - "$VER" <<'PY'
+          import sys
+          import zipfile
+
+          ver = sys.argv[1]
+          ruta = f"dist/buscador-linux-{ver}.zip"
+          with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
+              z.write("dist/buscador", "buscador")
+              z.write("LEAME.txt", "LEAME.txt")
+          print("zip:", ruta)
+          PY
+
+      - name: Adjuntar zip a la release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "dist/buscador-linux-${TAG#v}.zip" --clobber
