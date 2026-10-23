@@ -28,8 +28,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, ListView, Static
 
 from .escaner import Registro, borrar_cache, cargar_cache, guardar_cache, iniciar_escaneo, raices_por_defecto, validar_cache
-from .indice import abrir_bd, buscar_ph, pasada_indice, ruta_indice
-from .texto import normalizar
+from .indice import abrir_bd, buscar_ph, pasada_indice, ruta_indice, texto_de
+from .texto import fragmento, normalizar
 
 def texto_estado_indice(estado):
     """Texto de la barra de estado según la indexación de contenido.
@@ -565,6 +565,7 @@ class BuscadorApp(App):
     #estado { width: 100%; padding: 0 4; margin-top: 1; color: $text-muted; }
     #resultados { height: 1fr; width: 1fr; margin: 1 3 0 3; border: round $panel; }
     #ruta { width: 100%; padding: 0 4; color: $text; margin-bottom: 0; }
+    #fragmento { width: 100%; padding: 0 4; color: $text-muted; margin-bottom: 0; }
     """
 
     BINDINGS = [
@@ -643,6 +644,7 @@ class BuscadorApp(App):
         yield tabla
         # Ruta completa del archivo resaltado (visible abajo, sin recortar en la tabla)
         yield Label("", id="ruta")
+        yield Label("", id="fragmento")
         yield Footer()
 
     def on_mount(self):
@@ -1226,6 +1228,32 @@ class BuscadorApp(App):
         )
         self._pinta_estado(len(encontradas), ocultas)
         self._actualizar_ruta()
+        self._actualizar_fragmento()
+
+    def _texto_fragmento(self):
+        """Fragmento a mostrar del documento resaltado ('' si no entra por contenido)."""
+        tabla = self.query_one("#resultados", DataTable)
+        i = tabla.cursor_row
+        if self._coincidencias is None or not (0 <= i < len(self.mostradas)):
+            return ""
+        r = self.mostradas[i]
+        if r.ruta not in self._coincidencias:
+            return ""
+        try:
+            bd = abrir_bd(ruta_indice(self.raices))
+            try:
+                return fragmento(texto_de(bd, r.ruta), self.texto)
+            finally:
+                bd.close()
+        except sqlite3.Error:
+            return ""
+
+    def _actualizar_fragmento(self):
+        """Fragmento del documento resaltado; tolerante a desmonte de widgets."""
+        try:
+            self.query_one("#fragmento", Label).update(self._texto_fragmento())
+        except Exception:
+            pass
 
     def _pinta_estado(self, n_visibles, ocultas):
         """Barra de estado a todo color: escaneo amarillo, caché cian, filtros verdes."""
@@ -1270,6 +1298,7 @@ class BuscadorApp(App):
     @on(DataTable.RowHighlighted)
     def _fila_resaltada(self, event: DataTable.RowHighlighted):
         self._actualizar_ruta()
+        self._actualizar_fragmento()
 
     @on(DataTable.RowSelected)
     def _abrir_seleccion(self, event: DataTable.RowSelected):

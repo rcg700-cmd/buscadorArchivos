@@ -35,6 +35,27 @@ def _construir_tabla():
 _TABLA = _construir_tabla()
 
 
+def fragmento(texto: str, termino: str, ventana: int = 120) -> str:
+    """Trozo del texto original centrado en la primera aparición del término.
+
+    Se busca sobre una copia normalizada; como `normalizar` es 1:1, el índice
+    sirve para el original (aquí el término puede aparecer en MAYÚSCULAS o con
+    tildes y aun así se encuentra). Devuelve '…' + hasta `ventana` caracteres
+    (~30 de contexto antes del hit) con el hit DENTRO; `""` sin texto o sin hit.
+    """
+    if not texto or not termino:
+        return ""
+    copia = normalizar(texto)
+    pos = copia.find(normalizar(termino))
+    if pos < 0:
+        return ""
+    desde = max(0, pos - 30)
+    hasta = min(len(texto), desde + ventana)
+    pref = "…" if desde > 0 else ""
+    suf = "…" if hasta < len(texto) else ""
+    return f"{pref}{texto[desde:hasta].strip()}{suf}"
+
+
 def normalizar(texto: str) -> str:
     """Minúsculas por carácter + tildes a la base; la longitud no cambia."""
     if not isinstance(texto, str):

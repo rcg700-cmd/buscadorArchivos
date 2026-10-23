@@ -79,8 +79,6 @@ print("OK contenido: pasada automatica + estado listo + indexado")
 
 # --------------------------------------------------------------- union (tarea 8)
 
-import buscador.indice as indice2  # noqa: E402  (mismo módulo, otra carpeta TMP)
-
 TMP2 = Path(tempfile.mkdtemp(prefix="buscador_union_"))
 esc._carpeta_cache = lambda: TMP2
 indice._carpeta_cache = lambda: TMP2
@@ -90,7 +88,7 @@ FONDO = TMP2 / "informe anual.docx"  # el nombre NO menciona "presupuesto"
 fabrica_docx("presupuesto especial revisado", FONDO)
 st2 = FONDO.stat()
 RAICES2 = (str(TMP2),)
-REG2 = Register = Registro(
+REG2 = Registro(
     ruta=str(FONDO),
     nombre=FONDO.name,
     tipo="Word",
@@ -108,41 +106,86 @@ bd.close()
 
 
 async def main_union():
-    try:
-        app = BuscadorApp(raices=RAICES2)
-        app._comenzar_escaneo = lambda: None
-        async with app.run_test(size=(120, 25)) as pilot:
-            await pilot.pause()
-            entrada = app.query_one("#entrada")
+    app = BuscadorApp(raices=RAICES2)
+    app._comenzar_escaneo = lambda: None
+    async with app.run_test(size=(120, 25)) as pilot:
+        await pilot.pause()
+        entrada = app.query_one("#entrada")
 
-            # entra por contenido aunque su nombre no lo diga
-            entrada.value = "presupuesto"
-            await pilot.pause()
-            assert [r.ruta for r in app._encontradas()] == [str(FONDO)], app._encontradas()
-            assert app._coincidencias == {str(FONDO)}, app._coincidencias
+        # entra por contenido aunque su nombre no lo diga
+        entrada.value = "presupuesto"
+        await pilot.pause()
+        assert [r.ruta for r in app._encontradas()] == [str(FONDO)], app._encontradas()
+        assert app._coincidencias == {str(FONDO)}, app._coincidencias
 
-            # sin texto: nadie entra por contenido
-            entrada.value = ""
-            await pilot.pause()
-            assert app._coincidencias is None, app._coincidencias
+        # sin texto: nadie entra por contenido
+        entrada.value = ""
+        await pilot.pause()
+        assert app._coincidencias is None, app._coincidencias
 
-            # filtro de solo PDF: el docx (Word) desaparece
-            entrada.value = "presupuesto"
-            await pilot.pause()
-            app.action_filtro_pdf()
-            await pilot.pause()
-            assert app._encontradas() == [], app._encontradas()
-            app.action_filtro_pdf()  # apaga el filtro
-            await pilot.pause()
+        # filtro de solo PDF: el docx (Word) desaparece
+        entrada.value = "presupuesto"
+        await pilot.pause()
+        app.action_filtro_pdf()
+        await pilot.pause()
+        assert app._encontradas() == [], app._encontradas()
+        app.action_filtro_pdf()  # apaga el filtro
+        await pilot.pause()
 
-            # comodín: 'presu*' también lo encuentra (por contenido)
-            entrada.value = "presu*"
-            await pilot.pause()
-            assert [r.ruta for r in app._encontradas()] == [str(FONDO)], app._encontradas()
-        print("OK union: nombre + contenido filtran juntos (texto, vacio, F6, comodin)")
-    finally:
-        shutil.rmtree(TMP2, ignore_errors=True)
+        # comodín: 'presu*' también lo encuentra (por contenido)
+        entrada.value = "presu*"
+        await pilot.pause()
+        assert [r.ruta for r in app._encontradas()] == [str(FONDO)], app._encontradas()
+    print("OK union: nombre + contenido filtran juntos (texto, vacio, F6, comodin)")
+    # (sin limpieza aquí: los fixtures sirven a la prueba del fragmento, de abajo)
 
 
 asyncio.run(main_union())
+
+
+# ------------------------------------------------------------ fragmento (tarea 9)
+
+def test_fragmento():
+    from buscador.texto import fragmento
+
+    texto = "instrucciones dispersas para la reunion; luego viene el " * 3 + "presupuesto especial del tercer trimestre con detalles" + " y mas texto despues " * 3
+    f = fragmento(texto, "presupuesto especial")
+    assert "presupuesto especial" in f, f
+    assert len(f) <= 130, len(f)  # 120 de ventana + un '…" por lado
+    assert f.startswith("…") or texto.startswith(f[0]), f
+
+    assert fragmento("no hay nada interesante aqui", "zorro") == ""
+    assert fragmento("", "algo") == ""
+    assert fragmento("algo y algo", "") == ""
+
+    # el hit está en el ORIGINAL con su caja alta, localizado vía copia normalizada
+    f2 = fragmento("Ese PRESUPUESTO Especial está listo y hay texto de sobra despues del hit", "presupuesto especial")
+    assert "PRESUPUESTO" in f2 and "Especial" in f2, f2
+
+
+test_fragmento()
+print("OK fragmento: ventana y tildes")
+
+
+async def test_fragmento_en_app():
+    app = BuscadorApp(raices=RAICES2)
+    app._comenzar_escaneo = lambda: None
+    async with app.run_test(size=(120, 30)) as pilot:
+        await pilot.pause()
+        entrada = app.query_one("#entrada")
+        # fila que entró POR CONTENIDO: el label muestra el trozo del documento
+        entrada.value = "presupuesto"
+        await pilot.pause()
+        trozo = str(app.query_one("#fragmento").render())
+        assert "presupuesto" in trozo.casefold(), trozo
+
+        # fila que solo coincide por NOMBRE: sin fragmento
+        entrada.value = "informe anual"
+        await pilot.pause()
+        assert str(app.query_one("#fragmento").render()) == "", app._coincidencias
+    print("OK fragmento: label al resaltar (contenido sí, nombre no)")
+
+
+asyncio.run(test_fragmento_en_app())
 print("TODO OK")
+shutil.rmtree(TMP2, ignore_errors=True)
