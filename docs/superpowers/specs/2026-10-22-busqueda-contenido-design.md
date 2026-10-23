@@ -11,6 +11,10 @@ dentro de los documentos**, con decisiones ya tomadas con el usuario:
 - **Un solo buscador:** el mismo cuadro de siempre; escribe y los resultados
   son la unión de coincidencias por nombre ∪ coincidencias por contenido.
   Sin teclas nuevas.
+- **Sin tildes en todas partes (decidido con el usuario):** la búsqueda por
+  **nombre** también pasa a ignorar las tildes — escribir `informacion`
+  encuentra "Informe Información.docx" tanto por nombre como por contenido
+  (coherencia). Detalle en §5a.
 - **Índice automático en segundo plano:** el usuario eligió "lo que sea más
   rápido". El escaneo por nombre queda idéntico y sigue siendo instantáneo
   desde el arranque; el índice de contenido se construye en un hilo daemon
@@ -111,6 +115,23 @@ CREATE TABLE IF NOT EXISTS docs (
   áéíóúàèìòùâêîôûäëïöüçñ y mayúsculas equivalentes; NO `NFD`, que cambia
   la longitud y rompería offsets). La consulta del usuario se normaliza
   igual antes de buscar.
+
+### §5a. Los nombres también sin tildes (migración de caché)
+
+El filtro por nombre de hoy usa `nombre_min` (solo casefold). Para
+coherencia pasa a usar la MISMA `normalizar()` del índice: `Registro`
+gana un campo derivado (o se reinterpreta `nombre_min`) calculado con
+`normalizar()`. Consecuencias mecanizables:
+
+- `"version"` del JSON de caché: 1 → 2; al cargar una caché versión 1 se
+  recalcula `nombre_min` normalizado en memoria y se guarda migrada la
+  próxima vez que se escriba (sin drama: es una línea derivada, nunca se
+  pierde el nombre original).
+- El modo duplicados (F10) agrupa por `nombre_min` — pasa a la versión
+  normalizada automáticamente (agrupará también "Informe" con "informé",
+  cambio aceptable y deseable).
+- Las pruebas existentes que siembran nombres con tildes verifican el
+  matching sin tilde.
 - **Búsqueda por contenido:** `SELECT ruta FROM docs WHERE texto_norm LIKE
   '%<consulta_norm>%', LIMIT 5000`, con `%`/`_` de la consulta escapados.
   Los comodines `*`/`?` del usuario se traducen a `%`/`_` (igual que el
@@ -126,15 +147,22 @@ CREATE TABLE IF NOT EXISTS docs (
 
 - **Qué se indexa:** solo registros con extensión extraíble (§4) que
   existan, con `st_size <= MAX_TAMANO_ARCHIVO` (100 MB por defecto) y, para
-  PDF, tope de `MAX_PAGINAS_PDF` (500 páginas). Constantes de módulo.
+  PDF, **tope de `MAX_PAGINAS_PDF` (500 páginas, decisión: se indexan las
+  primeras 500, no se descarta el PDF** — mejor contenido parcial que
+  exclusión silenciosa permanente). Constantes de módulo.
 - **Cuándo:** al recibir `("fin", lista)` de un escaneo y al cargar una
-  caché con registros: una **pasada de índice** en hilo daemon:
-  1. abre la SQLite del ámbito;
-  2. para cada registro extraíble: si la fila existe y coinciden
-     `mtime`/`tamano` → se salta; si no, extrae y `INSERT OR REPLACE`,
-     con commit cada N=20 documentos;
-  3. **saneo de borrados:** filas cuya ruta ya no exista en disco o ya no
-     esté entre los registros del ámbito → `DELETE`.
+  caché con registros: una **pasada de índice** con **pool de trabajadores
+  paralelo al estilo del escaneo** (decisión tomada tras el builder check:
+  extraer texto es lo pesado — pypdf en PDFs largos — y el usuario eligió
+  "lo que sea más rápido"). Estructura:
+  - **pool de extracción** (~`N_HILOS` del escáner): cada trabajador toma
+    un archivo extraíble, extrae el texto y lo encola ya normalizado;
+  - **un único hilo escritor** (los writes a SQLite no se comparten):
+    drena la cola, `INSERT OR REPLACE` con commit cada N=20 documentos y
+    cuenta `hechos/total/sin_texto`;
+  - cancelar el pool = dejar de alimentar la cola + retirar trabajadores
+    cuando la cola interna se vacíe (mismo patrón del escáner: contador
+    de pendientes + lock).
 - **Cancelación:** token `self._generacion` (ya existe) capturado al lanzar
   la pasada; si cambia (F5, cambio de ámbito) o la app termina, el hilo
   completa su documento en curso y cancela el resto — nunca escribe con un
@@ -162,6 +190,14 @@ CREATE TABLE IF NOT EXISTS docs (
   con la misma tolerancia defensiva de `_actualizar_ruta`.
 - **Progreso de indexación en la barra de estado** (§6), con
   `_pinta_estado` extendido (ojo con el KeyError conocido de `encontradas`).
+- **La SELECT solo propone rutas presentes en memoria (decisión del
+  builder check):** `_encontradas()` hace join entre las rutas del índice y
+  `self.registros`; filas huérfanas transitorias (aún no saneadas) se
+  descartan — nunca se sintetiza un `Registro` desde la DB (rompería el
+  guard anti-fantasma y los supuestos de carga de caché).
+- **`borrar_cache` / Ctrl+D / `--borrar-cache`** también eliminan los
+  `indice_*.db` (decisión del builder check: el usuario espera que la
+  opción de caché cubra el índice de contenido; se rellena solo otra vez).
 - **CSV, orden, papelera, ayuda (F1):** sin cambios salvo documentar el
   índice en la ayuda y en LEAME/README.
 
@@ -210,10 +246,23 @@ redirigir `_ruta_indice` y `_ruta_preferencias` a temporales).
 
 - Nombres exactos de funciones/módulos nuevos (propuesta: módulo nuevo
   `buscador/indice.py` con `extraer_texto(ruta)`, `normalizar(texto)`,
-  `pasada_indice(...)`, `buscar(...)`; `app.py` solo orquesta hilo + cola +
-  estado + fragmento).
+  `pasada_indice(...)`, `buscar(...)`; `app.py` solo orquesta pool +
+  escritor + cola + estado + fragmento).
 - Constantes finales (`MAX_TAMANO_ARCHIVO`, `MAX_PAGINAS_PDF`, límite LIKE,
   ventana del fragmento).
 - Estilo del fragmento (truncamiento; resaltar el término o no).
 - Conexión por llamada vs. conexión de lectura sostenida en la UI.
 - CSS del nuevo label; layout exacto de la zona inferior.
+
+## 12. Respuestas del builder check (integradas arriba)
+
+1. Pool de extracción paralelo + escritor serial → §6 (elegido por el
+   criterio del usuario "lo más rápido").
+2. Nombres sin tildes con migración de caché v1→v2 → §5a (decisión del
+   usuario).
+3. PDF >500 páginas: indexar las primeras 500, no saltarse → §6 (llamada
+   propia).
+4. Ctrl+D / `--borrar-cache` borran también `indice_*.db` → §7 (llamada
+   propia).
+5. Join de la SELECT con `self.registros`; nunca sintetizar Registros →
+   §7 (llamada propia).
