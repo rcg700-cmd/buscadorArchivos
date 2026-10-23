@@ -37,4 +37,46 @@ def run():
     print("TODO OK")
 
 
+def run_reloj_roto():
+    """Un stat raro (OverflowError en el 2.º archivo) NO debe matar al
+    trabajador: el 3.er archivo tiene que seguir apareciendo."""
+    import datetime as dt_real
+
+    import buscador.escaner as esc
+
+    real_datetime = dt_real.datetime
+
+    class RelojRoto(real_datetime):
+        contador = 0
+
+        @classmethod
+        def fromtimestamp(cls, t):
+            cls.contador += 1
+            if cls.contador == 3:  # el primer fromtimestamp del 2.º archivo
+                raise OverflowError("fecha imposible")
+            return real_datetime.fromtimestamp(t)
+
+    base = Path(tempfile.mkdtemp(prefix="buscador_reloj_"))
+    for nombre in ("a.docx", "b.docx", "c.docx"):
+        (base / nombre).write_bytes(b"prueba")
+    anterior = esc.datetime
+    esc.datetime = RelojRoto
+    try:
+        hilo, cola = iniciar_escaneo([str(base)], guardar=False)
+        hilo.start()
+        while True:
+            mensaje = cola.get(timeout=120)
+            if isinstance(mensaje, tuple) and mensaje[0] == "fin":
+                nombres = {r.nombre for r in mensaje[1]}
+                assert nombres == {"a.docx", "c.docx"}, nombres
+                print("OK escaner: stat imposible salta el archivo, no mata al trabajador")
+                break
+    finally:
+        esc.datetime = anterior
+        shutil.rmtree(base, ignore_errors=True)
+
+
+run_reloj_roto()
+
+
 run()

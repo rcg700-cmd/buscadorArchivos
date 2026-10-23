@@ -131,7 +131,10 @@ def escanear(raices, salida, guardar=True):
                                         nombre_min=nombre.casefold(),
                                     )
                                 )
-                        except OSError:
+                        except (OSError, OverflowError, ValueError):
+                            # stat/fecha ilegibles para ese archivo: se salta
+                            # (un OverflowError aquí mataría al trabajador
+                            # entero y dejaría el escaneo parcial)
                             continue
             except OSError:
                 pass
