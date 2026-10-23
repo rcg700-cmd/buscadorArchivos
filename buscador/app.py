@@ -12,6 +12,7 @@ import os
 import queue
 import re
 import shutil
+import sqlite3
 import subprocess
 import threading
 from datetime import datetime
@@ -27,7 +28,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, ListView, Static
 
 from .escaner import Registro, borrar_cache, cargar_cache, guardar_cache, iniciar_escaneo, raices_por_defecto, validar_cache
-from .indice import pasada_indice
+from .indice import abrir_bd, buscar_ph, pasada_indice, ruta_indice
+from .texto import normalizar
 
 def texto_estado_indice(estado):
     """Texto de la barra de estado según la indexación de contenido.
@@ -623,6 +625,8 @@ class BuscadorApp(App):
         self._generacion = 0  # invalida resultados de hilos de fondo (validación) tras cambiar de ámbito o re-escanear
         self._cancelar_indice = threading.Event()  # corta la pasada de índice en vuelo
         self._estado_indice = None  # ("indexando", hechos, total, sin texto) / ("listo", total, sin texto)
+        self._coincidencias = None  # rutas que entraron por contenido en la última búsqueda
+        self._cache_busqueda = {}  # (texto normalizado, generación) -> rutas por contenido
         self._firma = None  # (texto, total, escaneando, de_cache) para saber si cambió la vista
 
     def compose(self) -> ComposeResult:
@@ -1098,27 +1102,72 @@ class BuscadorApp(App):
                 "descartaron (F5 para ver los nuevos)"
             )
 
+    def _rutas_por_contenido(self):
+        """Rutas DEL AMBITO cuyo texto dentro coincide con lo escrito.
+
+        Consulta el índice SQLite (si existe); cachea la SELECT por
+        (texto normalizado, generación) para no repetirla con cada tecla.
+        Solo devuelven valor las rutas de REGISTROS VIVOS: la SELECT nunca
+        sintetiza resultados (el diseño exige Registros reales).
+        """
+        if not self.texto:
+            self._coincidencias = None
+            return set()
+        clave = (normalizar(self.texto), self._generacion)
+        if clave not in self._cache_busqueda:
+            rutas = set()
+            archivo = ruta_indice(self.raices)
+            if archivo.exists():
+                try:
+                    bd = abrir_bd(archivo)
+                    try:
+                        rutas = set(buscar_ph(bd, self.texto))
+                    finally:
+                        bd.close()
+                except sqlite3.Error:
+                    rutas = set()  # índice dañado: solo queda la búsqueda por nombre
+            self._cache_busqueda[clave] = rutas
+        rutas = self._cache_busqueda[clave] & self.rutas_conocidas
+        rutas -= self._rutas_borradas
+        self._coincidencias = rutas
+        return rutas
+
     def _encontradas(self):
-        """Filtra por nombre y tipo según el estado actual.
+        """Filtra por nombre, contenido y tipo según el estado actual.
 
         - Texto sin comodines ('*' o '?'): subcadena simple sobre el nombre.
         - Con comodines: patrón tipo cmd (fnmatch) sobre el nombre completo,
           p. ej. 'informe*', '*.pdf', 'plan?2026'.
-        - self.filtros: si tiene tipos, solo se conservan esos.
+        - UNION por contenido: además de lo que casa por nombre, se añaden
+          al final los registros cuyo texto interno está en el índice y
+          coincide con lo escrito (sin duplicar los ya puestos).
+        - self.filtros: si tiene tipos, solo se conservan esos (corre DESPUÉS
+          de la unión, también sobre las coincidencias por contenido).
         - self.duplicados (F10): conserva solo los nombres que aparecen 2+
-          veces entre lo ya filtrado (por nombre_min, con extensión).
-        - self.orden: ('nombre', False) conserva el orden por nombre (el que
-          ya trae la lista tras el escaneo/caché); otros criterios ordenan
-          el resultado filtrado al vuelo.
+          veces entre lo ya filtrado.
+        - self.orden: ('nombre', False) conserva el orden base (los que entran
+          por contenido van a continuación); otros criterios ordenan al vuelo.
         """
+        if not self.texto:
+            self._coincidencias = None
         filtradas = self.registros
         if self.texto:
-            t = self.texto.casefold()
+            t = normalizar(self.texto)
             if "*" in t or "?" in t:
                 regex = re.compile(fnmatch.translate(t))
-                filtradas = [r for r in filtradas if regex.match(r.nombre_min)]
+                por_nombre = [r for r in filtradas if regex.match(r.nombre_min)]
             else:
-                filtradas = [r for r in filtradas if t in r.nombre_min]
+                por_nombre = [r for r in filtradas if t in r.nombre_min]
+            por_contenido = self._rutas_por_contenido()
+            vistos = set()
+            filtradas = []
+            for r in por_nombre:
+                filtradas.append(r)
+                vistos.add(r.ruta)
+            for r in self.registros:
+                if r.ruta in por_contenido and r.ruta not in vistos:
+                    filtradas.append(r)
+                    vistos.add(r.ruta)
         if self.filtros:
             filtradas = [r for r in filtradas if r.tipo in self.filtros]
         if self.duplicados:
