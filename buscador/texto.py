@@ -47,6 +47,11 @@ def normalizar(texto: str) -> str:
 # Formatos OOXML/ODF que llevan su contenido en un ZIP de XML internos.
 EXTRACCION = {".docx", ".docm", ".pptx", ".pptm", ".xlsx", ".xlsm", ".odt", ".ods", ".odp"}
 
+# PDF: tope de peso por archivo y de páginas leídas (los ultralargos se
+# indexan parcialmente, según el diseño aprobado).
+MAX_TAMANO_ARCHIVO = 100 * 1024 * 1024
+MAX_PAGINAS_PDF = 500
+
 _SLIDE_AION = re.compile(r"^ppt/slides/slide(\d+)\.xml$")
 _HOJA_AION = re.compile(r"^xl/worksheets/sheet\d+\.xml$")
 
@@ -59,9 +64,13 @@ def extraer_texto(ruta: str):
     Nunca lanza: los documentos del disco están fuera de nuestro control.
     """
     ext = os.path.splitext(ruta)[1].lower()
-    if ext not in EXTRACCION:
+    if ext not in EXTRACCION and ext != ".pdf":
         return None
     try:
+        if ext == ".pdf":
+            if os.path.getsize(ruta) > MAX_TAMANO_ARCHIVO:
+                return None
+            return _texto_pdf(ruta)
         with zipfile.ZipFile(ruta) as z:
             if ext in (".docx", ".docm"):
                 return _texto_docx(z)
@@ -72,6 +81,29 @@ def extraer_texto(ruta: str):
             return _texto_odf(z)
     except (zipfile.BadZipFile, OSError, ET.ParseError, KeyError, ValueError):
         # KeyError: zip sin la entrada esperada; ValueError: bytes no UTF-8 del XML.
+        return None
+
+
+def _texto_pdf(ruta: str):
+    """Texto de las primeras MAX_PAGINAS_PDF páginas, unido por renglón.
+
+    Import de pypdf perezoso: mientras no haga falta, no se desempaca nada
+    (y si faltara la librería, el PDF queda con búsqueda solo por nombre).
+    """
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return None
+    import logging
+    # Los avisos de pypdf (EOF marker not found, etc.) van al stderr de la
+    # consola y solo ensucian; de los errores reales nos ocupamos con None.
+    logging.getLogger("pypdf").setLevel(logging.CRITICAL)
+    from pypdf.errors import PdfReadError
+    try:
+        lector = PdfReader(ruta)
+        paginas = lector.pages[:MAX_PAGINAS_PDF]
+        return "\n".join(pagina.extract_text() or "" for pagina in paginas).strip()
+    except (PdfReadError, OSError, ValueError):
         return None
 
 

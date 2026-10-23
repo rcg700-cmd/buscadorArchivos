@@ -130,3 +130,87 @@ def test_extraccion_office():
 
 test_extraccion_office()
 print("OK extraer_texto office")
+
+
+# ---------------------------------------------------------------- extraer_texto PDF
+
+PDF_CAB = b"%PDF-1.4\n"
+
+
+def fabrica_pdf(textos, ruta):
+    """PDF válido sin compresión: un stream `(texto) Tj` por página, xref a mano."""
+    n = len(textos)
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>"]
+    kids = " ".join(f"{4 + 2 * i + 1} 0 R" for i in range(n))
+    objs.append(f"<< /Type /Pages /Kids [{kids}] /Count {n} >>".encode("latin-1"))
+    objs.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    for i, texto in enumerate(textos):
+        stream = f"BT /F1 12 Tf 72 720 Td ({texto}) Tj ET".encode("latin-1")
+        objs.append(
+            b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream)
+        )
+        objs.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            f"/Resources << /Font << /F1 3 0 R >> >> /Contents {4 + 2 * i} 0 R >>".encode(
+                "latin-1"
+            )
+        )
+    out = bytearray(PDF_CAB)
+    offsets = []
+    for idx, cuerpo in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += f"{idx} 0 obj\n".encode("latin-1") + cuerpo + b"\nendobj\n"
+    xref_pos = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n".encode("latin-1")
+    out += b"0000000000 65535 f \n"
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode("latin-1")
+    out += (
+        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_pos}\n%%EOF\n"
+    ).encode("latin-1")
+    Path(ruta).write_bytes(bytes(out))
+
+
+def test_extraccion_pdf():
+    import buscador.texto as texto_mod
+    from buscador.texto import extraer_texto
+
+    tmp = Path(tempfile.mkdtemp(prefix="buscador_pdf_"))
+    try:
+        # las 3 páginas están
+        pdf = tmp / "tres.pdf"
+        fabrica_pdf(["pagina uno", "pagina dos", "pagina tres"], pdf)
+        t = extraer_texto(str(pdf))
+        assert "pagina uno" in t and "pagina dos" in t and "pagina tres" in t, t
+
+        # tope de páginas: la 3 queda fuera
+        original_paginas = texto_mod.MAX_PAGINAS_PDF
+        texto_mod.MAX_PAGINAS_PDF = 2
+        try:
+            t2 = extraer_texto(str(pdf))
+            assert "pagina uno" in t2 and "pagina dos" in t2, t2
+            assert "pagina tres" not in t2, t2
+        finally:
+            texto_mod.MAX_PAGINAS_PDF = original_paginas
+
+        # tope de tamaño: con el límite en 10 bytes, un PDF real no entra
+        original_tamano = texto_mod.MAX_TAMANO_ARCHIVO
+        texto_mod.MAX_TAMANO_ARCHIVO = 10
+        try:
+            assert extraer_texto(str(pdf)) is None
+        finally:
+            texto_mod.MAX_TAMANO_ARCHIVO = original_tamano
+
+        # PDF truncado: None sin excepción
+        roto = tmp / "roto.pdf"
+        fabrica_pdf(["algo"], roto)
+        data = roto.read_bytes()
+        roto.write_bytes(data[: len(data) // 2])
+        assert extraer_texto(str(roto)) is None
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+test_extraccion_pdf()
+print("OK extraer_texto pdf")
