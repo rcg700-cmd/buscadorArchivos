@@ -140,13 +140,34 @@ def carpeta_exportacion():
     return next((c for c in candidatos if c.is_dir()), hogar)
 
 
+def _antiformula(campo):
+    """Cita con apóstrofe los valores que Excel tomaría como fórmula.
+
+    Un archivo con nombre que empiece por '=', '+', '-' o '@' se ejecutaría
+    como fórmula al abrir el CSV exportado (inyección CSV); la comillita lo
+    deja como texto. Los campos controlados por el programa no se citan.
+    """
+    texto = str(campo)
+    if texto.startswith(("=", "+", "-", "@")):
+        return "'" + texto
+    return texto
+
+
 def exportar_csv(datos, ruta):
     """Escribe los registros en un CSV (separador ';', UTF-8 con BOM para Excel)."""
     with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(("Nombre", "Tipo", "Creado", "Modificado", "Peso (bytes)", "Carpeta", "Ruta completa"))
         for r in datos:
-            w.writerow((r.nombre, r.tipo, fmt_fecha(r.creado), fmt_fecha(r.modificado), r.tamano, os.path.dirname(r.ruta), r.ruta))
+            w.writerow((
+                _antiformula(r.nombre),
+                r.tipo,
+                fmt_fecha(r.creado),
+                fmt_fecha(r.modificado),
+                r.tamano,
+                _antiformula(os.path.dirname(r.ruta)),
+                _antiformula(r.ruta),
+            ))
     return ruta
 
 

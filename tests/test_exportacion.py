@@ -60,6 +60,24 @@ async def main():
         assert len(filas) == len(datos) + 1, filas
         print("OK exportar_csv: BOM, ';' y escape de comillas correctos")
 
+        # --- las celdas que empiezan por =,+,-,@ se citan con apóstrofe
+        # (inyección de fórmulas al abrir el CSV en Excel)
+        peligro = tmp / "peligro.csv"
+        exportar_csv(
+            [
+                registro("=ejecuta().docx", r"C:\Descargas"),
+                registro("+suma.docx", r"C:\Descargas"),
+                registro("inocente.docx", r"@carpeta"),
+            ],
+            peligro,
+        )
+        p = list(csv_mod.reader(peligro.read_text(encoding="utf-8-sig").splitlines(), delimiter=";"))
+        assert p[1][0] == "'=ejecuta().docx", p[1]
+        assert p[2][0] == "'+suma.docx", p[2]
+        assert p[3][6].startswith("'@"), p[3]  # la ruta completa con carpeta peligrosa
+        assert p[3][0] == "inocente.docx", p[3]  # lo normal no se toca
+        print("OK exportar_csv: apóstrofe contra fórmulas de Excel")
+
         async with app.run_test(size=(120, 30)) as pilot:
             app.registros = list(datos)
             app.rutas_conocidas = {r.ruta for r in datos}
