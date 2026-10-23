@@ -55,7 +55,7 @@ async def main():
         assert filas[0] == ["Nombre", "Tipo", "Creado", "Modificado", "Peso (bytes)", "Carpeta", "Ruta completa"], filas[0]
         assert filas[5] == [
             "punto y coma ;.docx", "Word", "01/10/2026 00:00", "01/10/2026 00:00",
-            "1000", r"C:\Docs", r"C:\Docs\punto y coma ;.docx",
+            "1000", r"C:\Docs", os.path.join(r"C:\Docs", "punto y coma ;.docx"),
         ], filas[5]
         assert len(filas) == len(datos) + 1, filas
         print("OK exportar_csv: BOM, ';' y escape de comillas correctos")
