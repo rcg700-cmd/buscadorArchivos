@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .texto import normalizar
+
 # Hilos en paralelo: escanear carpetas distintas a la vez (cuello de botella = I/O de disco)
 N_HILOS = max(4, min(32, (os.cpu_count() or 4) * 4))
 
@@ -128,7 +130,7 @@ def escanear(raices, salida, guardar=True):
                                         tamano=st.st_size,
                                         creado=datetime.fromtimestamp(st.st_ctime),
                                         modificado=datetime.fromtimestamp(st.st_mtime),
-                                        nombre_min=nombre.casefold(),
+                                        nombre_min=normalizar(nombre),
                                     )
                                 )
                         except (OSError, OverflowError, ValueError):
@@ -186,6 +188,7 @@ def borrar_cache():
     borrado = False
     try:
         archivos = list(_carpeta_cache().glob("cache*.json"))
+        archivos.extend(_carpeta_cache().glob("indice_*.db"))
     except OSError:
         return False
     for p in archivos:
@@ -283,7 +286,7 @@ def guardar_cache(raices, registros):
     try:
         ruta.parent.mkdir(parents=True, exist_ok=True)
         datos = {
-            "version": 1,
+            "version": 2,
             "raices": list(raices),
             "registros": [
                 {
@@ -323,7 +326,7 @@ def cargar_cache(raices):
             except OSError:
                 pass
         return None
-    if datos.get("version") != 1 or datos.get("raices") != list(raices):
+    if datos.get("version") not in (1, 2) or datos.get("raices") != list(raices):
         return None
     registros = []
     for d in datos.get("registros", []):
@@ -336,7 +339,10 @@ def cargar_cache(raices):
                     tamano=d["tamano"],
                     creado=datetime.fromisoformat(d["creado"]),
                     modificado=datetime.fromisoformat(d["modificado"]),
-                    nombre_min=d["nombre_min"],
+                    # único dato cierto: el nombre bruto; el minúscula sin
+                    # tildes se recalcula SIEMPRE (v1 migrada sin coste y
+                    # v2 no confía en lo guardado)
+                    nombre_min=normalizar(d["nombre"]),
                 )
             )
         except (KeyError, TypeError, ValueError):
