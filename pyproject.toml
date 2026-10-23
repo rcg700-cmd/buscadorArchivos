@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "buscador-archivo"
-version = "1.4.0"
-description = "Buscador TUI de archivos de Office y PDF por nombre, con caché"
+version = "1.5.0"
+description = "Buscador TUI de archivos de Office y PDF por nombre y contenido, con caché"
 requires-python = ">=3.10"
-dependencies = ["textual>=0.60"]
+dependencies = ["textual>=0.60", "pypdf"]
 
 [project.scripts]
 buscador = "buscador.app:main"

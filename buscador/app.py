@@ -501,7 +501,10 @@ class AyudaScreen(ModalScreen):
     FUNCIONES = (
         "• Busca Word (.doc/.docx/.docm), Excel (.xls/.xlsx/.xlsm),\n"
         "  PowerPoint (.ppt/.pptx/.pptm), PDF y LibreOffice (.odt/.ods/.odp)\n"
-        "  [i]por nombre del archivo[/].",
+        "  por nombre. Además busca DENTRO de los formatos modernos (sin\n"
+        "  macros: .docx/.xlsx/.pptx/.odt/.ods/.odp y PDF, estos con pypdf):\n"
+        "  [i]la primera vez se indexa en segundo plano y toma su tiempo[/];\n"
+        "  después las búsquedas por contenido salen al instante.",
         "• Escaneo en paralelo del disco con resultados en vivo; la búsqueda\n"
         "  funciona mientras escanea y verá cuántas carpetas quedan.",
         "• Caché por ámbito (disco completo y cada carpeta elegida con el panel\n"
@@ -510,9 +513,8 @@ class AyudaScreen(ModalScreen):
         "  desaparecen de la lista sin re-escanear (F5 ve los de creación nueva).",
         "• Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el\n"
         "  texto se interpreta como patrón (como el 'dir' de CMD).",
-        "• Busca también DENTRO del contenido: Word, Excel, PowerPoint y PDF\n"
-        "  modernos (y LibreOffice) se indexan en segundo plano; al resaltar\n"
-        "  un resultado verás el fragmento donde apareció lo que escribiste.",
+        "• Al resaltar un resultado que entró por contenido verás debajo de\n"
+        "  la tabla el fragmento del documento donde apareció lo escrito.",
         "• Los filtros de tipo (F2..F7) se combinan con lo que escribas.",
         "• F10 activa el modo 'solo duplicados': muestra los nombres que\n"
         "  se repiten en más de una carpeta, agrupados y ordenados A→Z.",
@@ -543,7 +545,8 @@ class AyudaScreen(ModalScreen):
             tabla_atajos.add_row(f"[yellow b]{atajo}[/]", descripcion)
         renderable = Group(
             "[b]Buscador de archivos de Office y PDF[/b]",
-            "Busca por nombre y muestra tipo, fechas, peso y carpeta.",
+            "Busca por nombre (y dentro de los formatos modernos) y muestra\n"
+            "tipo, fechas, peso y carpeta.",
             "",
             "[yellow b]ATAJOS[/]  ([i]Esc vuelve a la app[/])",
             tabla_atajos,

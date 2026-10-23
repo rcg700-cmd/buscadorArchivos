@@ -1,8 +1,8 @@
-Buscador de archivos de Office y PDF (v1.4.0)
+Buscador de archivos de Office y PDF (v1.5.0)
 =============================================
 
 Archivo: buscador.exe — ejecutable de Windows, NO requiere instalar Python ni nada más.
-En la misma release puede descargar buscador-linux-1.4.0.zip, el binario
+En la misma release puede descargar buscador-linux-1.5.0.zip, el binario
 para Ubuntu (no requiere Python; descomprima y ejecute ./buscador en una
 terminal).
 
@@ -17,7 +17,21 @@ Cómo usarlo
 Dentro del programa
 -------------------
 - Escribe para buscar por nombre (filtra al instante); admite comodines
-  como *.pdf o informe*2026.
+  como *.pdf o informe*2026. Busca igual escriba usted "camion" o "camión":
+  acentos y mayúsculas no interfieren.
+
+Búsqueda por contenido
+----------------------
+Además del nombre, el buscador mira DENTRO de los documentos modernos:
+.docx, .xlsx, .pptx (y sus variantes sin macros), .odt/.ods/.odp y PDF.
+Escriba una palabra que esté dentro de un informe y aparecerá también,
+con el trozo del documento que la contiene visible al resaltar la fila.
+
+- La primera indexación va en segundo plano (verá "índice: N/M" en la
+  barra de estado); los documentos grandes solo se ven una vez listos.
+- No se lee el texto de: PDF escaneados sin texto real (imágenes) ni los
+  formatos viejos .doc, .xls y .ppt — esos se encuentran por nombre como
+  siempre.
 - ↑ / ↓ para navegar, Enter o doble clic abre el archivo.
 - Cada resultado lleva icono y color por tipo: Word azul, Excel verde,
   PowerPoint naranja, PDF rojo, LibreOffice teal.

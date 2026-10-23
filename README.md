@@ -1,12 +1,13 @@
 # buscadorArchivos
 
-Buscador de archivos de Office y PDF **por nombre**, con resultados **mientras escribes**. Interfaz de terminal (TUI) ligera hecha en Python + [Textual](https://textual.textualize.io). Funciona en **Windows** y **Ubuntu**.
+Buscador de archivos de Office y PDF **por nombre y por contenido**, con resultados **mientras escribes**. Interfaz de terminal (TUI) ligera hecha en Python + [Textual](https://textual.textualize.io). Funciona en **Windows** y **Ubuntu**.
 
 ![Vista previa](docs/vista_previa.svg)
 
 ## Características
 
 - 🔍 Búsqueda por nombre completo o parcial, filtrando al instante mientras tecleas. Además acepta **comodines** estilo terminal: `informe*2026`, `*.pdf`, `plan?2026`.
+- 📖 **Búsqueda por contenido:** también busca DENTRO de los documentos modernos (`.docx/.xlsx/.pptx`, `.odt/.ods/.odp` y PDF — no en los viejos `.doc/.xls/.ppt` ni en PDFs escaneados sin texto). El índice se construye **en segundo plano** (verás `🔎 índice: N/M` en la barra de estado) y, al resaltar un resultado que entró por contenido, se muestra el **fragmento** del documento donde aparece lo escrito. Busca lo mismo escribieras `camion` o `camión` (tildes y mayúsculas no interfieren).
 - 📂 **Panel `/`:** escribe `/` en la búsqueda y se despliega la lista de carpetas habituales (Documentos, Descargas, Escritorio, OneDrive…). Elige una y se escanea **solo esa carpeta** (con su propia caché, así alternar no fuerza re-escanear el disco). Sin `/`, busca en todo el disco.
 - 🚫 **Exclusiones:** archivo `excluir.txt` con carpetas a ignorar durante el escaneo (`node_modules`, respaldo de aplicaciones, etc.).
 - 🧹 **Ctrl+D** borra las cachés y re-escanea de cero (también disponible: `buscador --borrar-cache`).
@@ -84,6 +85,7 @@ buscador
   - Ubuntu: `~/.cache/buscador-archivo/cache_<hash>.json`
 - Los cambios del disco (archivos creados o borrados después del último escaneo) se reflejan con `F5`.
 - **Al abrir, la caché se verifica en segundo plano:** los archivos ya borrados del disco se descartan de la lista (y se limpian de la caché) sin re-escanear; para detectar los **nuevos** sigue siendo necesario `F5`.
+- **Índice de contenido:** cada ámbito tiene además un índice SQLite (`indice_<sha1>.db` junto a la caché). Al abrir este ámbito (con caché cargada o al terminar un escaneo) arranca una pasada en segundo plano con pool paralelo que extrae el texto de los documentos modernos y lo guarda (normalizado para buscar + comprimido para el fragmento); los archivos que ya están indexados y sin cambios (mtime/peso) se saltan, así las pasadas siguientes salen al instante. `Ctrl+D` / `--borrar-cache` también borran el índice.
 - **Enviar a la papelera (Ctrl+Supr):** en Windows va a la Papelera de reciclaje y se puede restaurar desde ahí; en Ubuntu usa `trash-put` si está instalado y, si no existe, lo borra definitivamente (con confirmación previa en ambos casos). El archivo desaparece de la tabla al instante y no vuelve a aparecer con resultados de caché en curso. El borrado permanente lo haces tú desde la papelera, fuera del programa.
 - **Vigilancia automática:** cada pocos segundos se comprueba en segundo plano que los archivos visibles sigan existiendo; los borrados fuera del buscador (Explorador, papelera, otro equipo...) salen de la tabla solos, sin F5 y sin re-escanear.
 - **Selector de usuario (F11):** panel con la carpeta base de usuarios (`C:\Users` en Windows, `/home` en Linux), cada usuario existente (marcado "(yo)" el actual) y "todo el disco". Cada ámbito tiene su propia caché (`cache_<sha1>.json`) y la elección se guarda en `preferencias.json` como `raices` (arranca con la última usada; "todo el disco" se guarda como `null` para volver al valor por defecto). Las carpetas de otros usuarios pueden dar "acceso denegado" en fragmentos (AppData de sistema, NTUSER.DAT): el escáner las salta sin fallar.
@@ -140,6 +142,8 @@ python tests/run_all.py
 ```
 buscador/
 ├── escaner.py   # recorre el disco, filtra extensiones, guarda y carga la caché
+├── texto.py     # normalizar (1:1 sin tildes), extracción de texto (ZIP+XML, pypdf) y fragmento
+├── indice.py    # capa SQLite por ámbito + pasada en segundo plano (pool + escritor)
 ├── app.py       # interfaz TUI (Textual): búsqueda en vivo + tabla de resultados
 └── __main__.py  # punto de entrada (python -m buscador)
 ```
