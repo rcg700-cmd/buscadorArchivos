@@ -6,3 +6,4 @@ dist/
 build_log.txt
 lista_pyz.txt
 buscador-windows-*.zip
+.superpowers/

@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "backend-design": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/backend-design/SKILL.md",
+      "computedHash": "d27317827d4c9d1ca2a70ecd68cd979fbbbf8ed27928a5e9bfcec05465f58877"
+    },
+    "caveman": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/caveman/SKILL.md",
+      "computedHash": "f1d6632733c55bbabce95c121780f00e47324a7384a9ce31aa68071584536fcb"
+    },
+    "diagnose": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/diagnose/SKILL.md",
+      "computedHash": "77eaa43f9099a08a400ec2331cd92da43442a5c73534bba7d68bf41c4a7746b0"
+    },
+    "excalidraw-diagram": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/excalidraw/SKILL.md",
+      "computedHash": "0244064236194e89945cc5cfca47d3dac5f1680afd46427e44fbf8ba18c72ca8"
+    },
+    "frontend-design": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/frontend-design/SKILL.md",
+      "computedHash": "f5eb287d86b7ea627086ad1dfde894e2f529b5bcc53d024b4f611064f40dd8f9"
+    },
+    "grill-with-docs": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/grill-with-docs/SKILL.md",
+      "computedHash": "4b279dccbddd671233468d51d53f55b435fbcd52b0b045ab0a1d1eb69b8c0cd9"
+    },
+    "improve-codebase-architecture": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/improve-codebase-architecture/SKILL.md",
+      "computedHash": "893a9e73616b294c673b951fd38e3446e9b1e93535ed52f00914825d0535b041"
+    },
+    "security-review": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/security-review/SKILL.md",
+      "computedHash": "aa42e2b5cebf201ab59639730b04033d2b27feabcbb02f7a943604fedc752f30"
+    },
+    "tdd": {
+      "source": "nicholasgriffintn/machine-setup",
+      "sourceType": "github",
+      "skillPath": "ai-tooling/skills/tdd/SKILL.md",
+      "computedHash": "a102b7e765f0e9968fca8a5596cbd467d06f0e5afcb8a7e5d0cb8f695517697e"
+    }
+  }
+}
