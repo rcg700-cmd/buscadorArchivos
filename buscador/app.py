@@ -27,6 +27,25 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, ListView, Static
 
 from .escaner import Registro, borrar_cache, cargar_cache, guardar_cache, iniciar_escaneo, raices_por_defecto, validar_cache
+from .indice import pasada_indice
+
+def texto_estado_indice(estado):
+    """Texto de la barra de estado según la indexación de contenido.
+
+    ("indexando", hechos, total, sin_texto) o ("listo", total, sin_texto).
+    """
+    if estado[0] == "indexando":
+        _, hechos, total, sin_texto = estado
+        texto = f"🔎 índice: {hechos}/{total}"
+        if sin_texto:
+            texto += f" · {sin_texto} sin texto"
+        return f"[green]{texto}[/]"
+    _, total, sin_texto = estado
+    texto = f"🔎 índice: listo ({total})"
+    if sin_texto:
+        texto += f" · {sin_texto} sin texto"
+    return f"[green]{texto}[/]"
+
 
 MAX_MOSTRADOS = 1000  # máximo de filas en pantalla (por rendimiento)
 INTERVALO_VIGILANCIA = 5  # segundos entre chequeos de que los archivos visibles siguen ahí
@@ -489,6 +508,9 @@ class AyudaScreen(ModalScreen):
         "  desaparecen de la lista sin re-escanear (F5 ve los de creación nueva).",
         "• Sin comodines busca todo lo que contenga el texto; con '\\*' o '?' el\n"
         "  texto se interpreta como patrón (como el 'dir' de CMD).",
+        "• Busca también DENTRO del contenido: Word, Excel, PowerPoint y PDF\n"
+        "  modernos (y LibreOffice) se indexan en segundo plano; al resaltar\n"
+        "  un resultado verás el fragmento donde apareció lo que escribiste.",
         "• Los filtros de tipo (F2..F7) se combinan con lo que escribas.",
         "• F10 activa el modo 'solo duplicados': muestra los nombres que\n"
         "  se repiten en más de una carpeta, agrupados y ordenados A→Z.",
@@ -599,6 +621,8 @@ class BuscadorApp(App):
         self._duplicados_info = None  # (grupos, archivos) del último refresco (modo F10)
         self._claves_columna = {}  # clave lógica -> ColumnKey del DataTable
         self._generacion = 0  # invalida resultados de hilos de fondo (validación) tras cambiar de ámbito o re-escanear
+        self._cancelar_indice = threading.Event()  # corta la pasada de índice en vuelo
+        self._estado_indice = None  # ("indexando", hechos, total, sin texto) / ("listo", total, sin texto)
         self._firma = None  # (texto, total, escaneando, de_cache) para saber si cambió la vista
 
     def compose(self) -> ComposeResult:
@@ -643,6 +667,10 @@ class BuscadorApp(App):
 
     def _aplicar_raices(self, raices):
         """Cambia el ámbito de búsqueda usando su caché si ya existe."""
+        # Cualquier pasada de índice de otro ámbito se queda colgada: se corta
+        # (la lista de registros nueva es otra) y se limpia el estado visible.
+        self._cancelar_indice.set()
+        self._estado_indice = None
         self.raices = tuple(raices)
         self.registros = []
         self.rutas_conocidas = set()
@@ -661,6 +689,9 @@ class BuscadorApp(App):
             # Validación incremental en segundo plano: descarta los archivos
             # borrados desde el último escaneo sin re-escanear nada.
             self._iniciar_validacion(self.registros)
+            # Indexación del contenido (Word/Excel/PDF/LibreOffice modernos):
+            # pasa a segundo plano; actualiza la BD del índice con lo faltante.
+            self._lanzar_indice()
         else:
             self._comenzar_escaneo()
 
@@ -875,6 +906,10 @@ class BuscadorApp(App):
 
     def _comenzar_escaneo(self):
         """Inicia un escaneo en segundo plano sin borrar lo ya visible."""
+        # La lista va a cambiar por completo: corta la pasada de índice en vuelo
+        # (la del nuevo escaneo se lanza al llegar el "fin" con la lista fresca).
+        self._cancelar_indice.set()
+        self._estado_indice = None
         self.escaneando = True
         self._generacion += 1  # los resultados de validación de la caché quedan obsoletos
         self.hilo, self.cola = iniciar_escaneo(self.raices)
@@ -907,6 +942,27 @@ class BuscadorApp(App):
     def _cierra_panel(self, _resultado=None):
         self.panel_abierto = False
 
+    def _lanzar_indice(self):
+        """Pasada de índice en segundo plano sobre la lista actual.
+
+        Corta la anterior (si la había), renueva la señal de cancelación y
+        lanza `pasada_indice` en un hilo: ella publica "indice"/"indice_fin"
+        sobre la cola con la generación y el ámbito de este arranque.
+        """
+        self._cancelar_indice.set()  # si había una pasada viva, se acaba
+        cancelar = threading.Event()
+        self._cancelar_indice = cancelar
+        gen = self._generacion
+        raices = self.raices
+        registros = self.registros  # lista del momento (la pasada no la toca)
+        self._estado_indice = ("indexando", 0, 0, 0)
+        threading.Thread(
+            target=pasada_indice,
+            args=(raices, registros, self.cola, gen, cancelar),
+            daemon=True,
+            name="indice",
+        ).start()
+
     def _recibir(self):
         """Mueve los registros nuevos del hilo de escaneo a la lista principal.
 
@@ -931,6 +987,7 @@ class BuscadorApp(App):
                     self.de_cache = False
                     self._progreso = None
                     self._generacion += 1  # cualquier validación en vuelo ya no aplica a esta lista fresca
+                    self._lanzar_indice()  # indexar el contenido de lo recién escaneado
                     fin = True
                     break
                 if elemento[0] == "progreso":
@@ -939,6 +996,24 @@ class BuscadorApp(App):
                     continue
                 if elemento[0] == "validadas":
                     self._aplicar_validadas(elemento)
+                    continue
+                if elemento[0] in ("indice", "indice_fin"):
+                    # de otra generación u otro ámbito: obsoleto, se ignora
+                    if elemento[1] != self._generacion or elemento[2] != self.raices:
+                        continue
+                    if elemento[0] == "índice" or elemento[0] == "indice":
+                        self._estado_indice = (
+                            "indexando", elemento[3], elemento[4], elemento[5],
+                        )
+                    elif self._estado_indice:
+                        # los totales llegaron con el última "indice"
+                        self._estado_indice = (
+                            "listo", self._estado_indice[2], self._estado_indice[3],
+                        )
+                    else:
+                        self._estado_indice = ("listo", 0, 0)
+                    # solo repinta la barra (barato: no reconstruye la tabla)
+                    self._pinta_estado(*self._visibles_estado)
                     continue
                 if elemento[0] == "vigilancia":
                     self._aplicar_vigilancia(elemento)
@@ -1111,6 +1186,8 @@ class BuscadorApp(App):
         if self.filtros:
             estado += " · [green b]Filtros: " + "+".join(sorted(self.filtros)) + "[/]"
         estado += f" · [magenta]Orden: {ETIQUETA_ORDEN[self.orden[0]]} {'↓' if self.orden[1] else '↑'}[/]"
+        if self._estado_indice:
+            estado += " · " + texto_estado_indice(self._estado_indice)
         if self.duplicados and self._duplicados_info:
             grupos, total = self._duplicados_info
             estado += f" · [cyan b]Duplicados[/]: {fmt_num(grupos)} grupos · {fmt_num(total)} archivos"
